@@ -4,7 +4,7 @@ A complete **disassembly- & resource-backed native Win64 Rust port** (`windows-s
 
 - **Classic After Dark 1.0a (1991)** — **37 modules** (all 34 `.AD` modules, both `AD.EXE` built-in savers, and the `ADMODULE.SDK` Blanker sample)
 - **The Simpsons After Dark (1994)** — **15 modules** (2,647 `RLEP` frames, 12,175 `OFst`/`OFtb` compound poses, 87 digitized cast voice clips, 9 polyphonic MIDI songs)
-- **Star Trek: The Next Generation After Dark (1994)** — **13 modules** (1,518 `RLEP` frames, 3,240 `OFst`/`OFtb` compound poses, 56 bridge/cast audio clips, 2 MIDI scores)
+- **Star Trek: The Next Generation After Dark (1994)** — **13 modules** (1,518 `RLEP` frames, 3,240 `OFst`/`OFtb` compound poses, 56 bridge/cast audio clips, 8 MIDI scores)
 - **Looney Tunes After Dark (1995)** — **12 modules** (2,050 `RLEP` frames, 8,534 `OFst`/`OFtb` compound poses, 103 cast voice/SFX clips including MACE 3:1 ADPCM audio, 13 MIDI cartoon themes)
 
 ---
@@ -148,19 +148,19 @@ A complete **disassembly- & resource-backed native Win64 Rust port** (`windows-s
 
 | Module | ID | Highlights |
 |---|---|---|
-| **Ascension** | `tng_ascension` | Worf's Klingon Rite of Ascension chamber with Painstik gauntlets and Klingon battle cries |
-| **Bad Dog!** | `tng_bad_dog` | Alien shapeshifter morphing from a glowing orb into a creature prowling across your Windows desktop |
-| **Borg** | `tng_borg` | Borg Cube tractor beams, green assimilation grid lasers, and *"Resistance is futile"* voice clips over your desktop |
-| **Communicator** | `tng_communicator` | Starfleet LCARS comm badge & incoming subspace hail transmissions from Picard, Riker, Data, Worf & Geordi |
-| **Crystalline Entity** | `tng_crystalline` | Refracting fractal Crystalline Entity shattering crystal shards out of your live Windows desktop |
-| **Data** | `tng_data` | Lt. Commander Data painting at his easel, reciting Ode to Spot, and petting Spot the cat |
-| **Encounter at Farpoint** | `tng_farpoint` | Spaceborne Farpoint jellyfish entities pulsing with bioluminescent color spectra in orbit |
-| **Enterprise** | `tng_enterprise` | USS *Enterprise* NCC-1701-D cruising at impulse and jumping to warp flash across a deep-space nebula starfield |
-| **Holodeck 3** | `tng_holodeck` | Yellow/black Holodeck wireframe grid materializing 3D holographic simulations |
-| **Number One** | `tng_number_one` | Commander Riker playing jazz trombone solos in Ten Forward with floating musical notes |
-| **Parallels** | `tng_parallels` | Quantum fissure tears opening across the Windows desktop as alternate-reality *Enterprise* ships emerge |
-| **Scotty's Files** | `tng_scottys_files` | Captain Montgomery Scott's animated LCARS technical schematics & Starfleet vessel blueprints |
-| **TNG Trivia** | `tng_trivia` | Full LCARS bridge console *Star Trek: TNG* trivia computer (`QERY`) with categories, timer, and ranks |
+| **Counselor Troi** | `tng_troi` | Deanna Troi offering empathetic psychological counsel on the *Enterprise-D* bridge & Ten Forward |
+| **Data Dances** | `tng_data_dances` | Lt. Commander Data performing tap, rhumba, cha-cha, and foxtrot routines (`SONG_DATA_TAP`, `#10..#37`) on the Holodeck |
+| **Encounters** | `tng_encounters` | USS *Enterprise* NCC-1701-D encountering Romulan Warbirds, Klingon Birds-of-Prey, and Borg Cubes in deep space |
+| **Nanites** | `tng_nanites` | Evolving microscopic Nanites multiplying and assembling circuitry across your live Windows desktop |
+| **Officers' Review** | `tng_officers_review` | Interactive LCARS Starfleet Academy & Bridge Officer evaluation exam (`QERY`) with cast voice reactions |
+| **Personnel Files** | `tng_personnel_files` | LCARS Starfleet Personnel Database displaying animated crew dossiers for Picard, Riker, Data, Worf, Troi, Crusher & La Forge |
+| **Science Stations** | `tng_science_stations` | Animated LCARS bridge science consoles, Subspace/Warp Field telemetry, and sensor diagnostics |
+| **Starbase** | `tng_starbase` | Orbital Starbase space dock with arriving and departing Starfleet vessels, shuttles, and running lights |
+| **Starfleet Messages** | `tng_starfleet_messages` | Incoming LCARS Subspace Priority One transmissions and customizable Starfleet command dispatches |
+| **Tachyon** | `tng_tachyon` | Geometric tachyon particle detection fields and quantum wave-front interference ribbons |
+| **The Borg** | `tng_borg` | Borg drones beaming onto your live Windows desktop with green assimilation lasers and *"Resistance is futile"* |
+| **Warp Effect** | `tng_warp_effect` | Relativistic starlight streaking into warp drive as Picard orders *"Engage!"* |
+| **Worf's Weapons** | `tng_worfs_weapons` | Lt. Worf & Alexander practicing with the Klingon bat'leth and phasers across your Windows desktop |
 
 ### Collection 4: Looney Tunes After Dark (1995 — 12 Modules)
 
