@@ -1,12 +1,13 @@
 //! *Warp Effect* — 1994 *Star Trek: The Next Generation* After Dark 3.0 Module.
 //!
-//! Authentic streaking TNG warp starfield with adjustable 3D camera heading
-//! (`View Angle: 0°..345°` or continuous `Roam`), star count (`20..200`),
-//! and `Impulse / Warp 1..Warp 9` speed with classic prismatic Doppler streaks!
+//! Full-widescreen HD/4K TNG warp starfield with aspect-aware 3D star volume
+//! (filling 16:9 and 21:9 ultrawide edges cleanly), resolution-scaled prismatic
+//! Doppler streaks, glowing starlight tips, adjustable camera heading (`0°..345°`
+//! or continuous `Roam`), star count (`20..200`), and `Impulse..Warp 9` speed!
 
 use ad_sdk::{AdContext, AdControl, AdMetadata, AdModule, AdResult, MsvcRand};
 
-use crate::simpsons::{draw_line_px, fill_rect_px};
+use crate::simpsons::{draw_line_px, fill_circle_px, fill_rect_px};
 use super::{MOD_WARP_EFFECT, SND_PICARD_ENGAGE, tng_pack};
 
 struct WarpStar {
@@ -35,6 +36,7 @@ pub struct WarpEffectModule {
     yaw_rad: f32,
     roam: bool,
     speed_factor: f32,
+    x_span: f32,
     tick: usize,
 }
 
@@ -45,6 +47,7 @@ impl WarpEffectModule {
             yaw_rad: 0.0,
             roam: false,
             speed_factor: 1.0,
+            x_span: 2.2,
             tick: 0,
         }
     }
@@ -107,9 +110,9 @@ impl WarpEffectModule {
         }
     }
 
-    fn spawn_star(rng: &mut MsvcRand, random_z: bool) -> WarpStar {
-        let x = ((rng.rand_mod(2001) - 1000) as f32) / 500.0;
-        let y = ((rng.rand_mod(2001) - 1000) as f32) / 500.0;
+    fn spawn_star(rng: &mut MsvcRand, x_span: f32, random_z: bool) -> WarpStar {
+        let x = (((rng.rand_mod(2001) - 1000) as f32) / 1000.0) * x_span;
+        let y = (((rng.rand_mod(2001) - 1000) as f32) / 1000.0) * 2.0;
         let z = if random_z {
             ((rng.rand_mod(2001) - 1000) as f32) / 500.0
         } else {
@@ -148,16 +151,20 @@ impl AdModule for WarpEffectModule {
             self.yaw_rad = (angle_raw as f32 / 98.0) * std::f32::consts::TAU;
         }
 
+        let aspect = (ctx.surface.width as f32 / ctx.surface.height.max(1) as f32).clamp(1.0, 2.8);
+        self.x_span = 2.0 * aspect;
+
+        // Scale star density proportionally on widescreen displays so outer wings never look sparse!
         let count_raw = ctx.module.raw_control_value[1].clamp(0, 100);
-        let num_stars = (20 + (count_raw * 180) / 100) as usize;
+        let base_stars = 20 + (count_raw * 180) / 100;
+        let num_stars = ((base_stars as f32) * (0.75 + aspect * 0.35)).round() as usize;
 
         let spd_raw = ctx.module.raw_control_value[2].clamp(0, 100);
-        // Impulse (0.015) up to Warp 9 (0.145)
         self.speed_factor = 0.015 + (spd_raw as f32 / 100.0).powf(1.3) * 0.13;
 
         self.stars.clear();
         for _ in 0..num_stars {
-            self.stars.push(Self::spawn_star(ctx.rng, true));
+            self.stars.push(Self::spawn_star(ctx.rng, self.x_span, true));
         }
         self.tick = 0;
 
@@ -181,7 +188,8 @@ impl AdModule for WarpEffectModule {
         let h = ctx.surface.height;
         let cx = w as f32 * 0.5;
         let cy = h as f32 * 0.5;
-        let focal = (w.min(h) as f32) * 0.65;
+        let focal = (h as f32) * 0.72;
+        let res_thick = (h as f32 / 540.0).clamp(1.0, 3.0);
 
         // Subtle persistence decay so warp streaks leave silky glowing plasma tails!
         let dst = ctx.surface.pixels_mut();
@@ -195,22 +203,19 @@ impl AdModule for WarpEffectModule {
             }
         }
 
-        // Ship travels along world -Z; rotate world coordinates by yaw_rad to view forward/side/aft!
         let cos_y = self.yaw_rad.cos();
         let sin_y = self.yaw_rad.sin();
         let dz = self.speed_factor;
 
         for st in &mut self.stars {
-            // Move star past the ship along -Z; wrap smoothly inside the 3D star cube [-2..2]^3
             st.z -= dz;
             if st.z < -2.0 {
                 st.z += 4.0;
-                st.x = ((ctx.rng.rand_mod(2001) - 1000) as f32) / 500.0;
-                st.y = ((ctx.rng.rand_mod(2001) - 1000) as f32) / 500.0;
+                st.x = (((ctx.rng.rand_mod(2001) - 1000) as f32) / 1000.0) * self.x_span;
+                st.y = (((ctx.rng.rand_mod(2001) - 1000) as f32) / 1000.0) * 2.0;
                 st.has_prev = false;
             }
 
-            // Camera-space rotation around Y axis
             let rx = st.x * cos_y + st.z * sin_y;
             let rz = -st.x * sin_y + st.z * cos_y + 2.05;
             if rz <= 0.12 {
@@ -220,24 +225,30 @@ impl AdModule for WarpEffectModule {
             let sx = cx + (rx / rz) * focal;
             let sy = cy + (st.y / rz) * focal;
 
-            if sx < -80.0 || sx > w as f32 + 80.0 || sy < -80.0 || sy > h as f32 + 80.0 {
+            let pad = 96.0 * res_thick;
+            if sx < -pad || sx > w as f32 + pad || sy < -pad || sy > h as f32 + pad {
                 st.has_prev = false;
                 continue;
             }
 
             if st.has_prev {
-                // Draw TNG prismatic rainbow Doppler streak (blue/violet tail -> bright white tip!)
                 let dx = sx - st.prev_sx;
                 let dy = sy - st.prev_sy;
                 if dx * dx + dy * dy < (w.max(h) as f32 * 0.45).powi(2) {
-                    let stretch = 1.0 + self.speed_factor * 18.0;
+                    let stretch = 1.0 + self.speed_factor * 19.0;
                     let tx = sx - dx * stretch;
                     let ty = sy - dy * stretch;
                     let mx = (sx + tx) * 0.5;
                     let my = (sy + ty) * 0.5;
-                    let thick = if rz < 1.3 { 2 } else { 1 };
+                    let depth_mult = if rz < 1.0 {
+                        2.0
+                    } else if rz < 1.8 {
+                        1.4
+                    } else {
+                        1.0
+                    };
+                    let thick = (res_thick * depth_mult).round().clamp(1.0, 5.0) as i32;
                     let col = WARP_COLORS[st.hue_idx % WARP_COLORS.len()];
-                    // Tail in colored Doppler shift, leading tip in blazing starlight white!
                     draw_line_px(ctx.surface, tx as i32, ty as i32, mx as i32, my as i32, col, thick);
                     draw_line_px(
                         ctx.surface,
@@ -248,6 +259,9 @@ impl AdModule for WarpEffectModule {
                         0x00FF_FFFF,
                         thick,
                     );
+                    if thick >= 2 {
+                        fill_circle_px(ctx.surface, sx as i32, sy as i32, (thick / 2).max(1), 0x00FF_FFFF);
+                    }
                 }
             }
             st.prev_sx = sx;

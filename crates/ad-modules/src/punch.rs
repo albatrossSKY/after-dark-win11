@@ -144,9 +144,12 @@ impl PunchOutModule {
         // 1:0012..1:02FE
         let rgn_w = ctx.module.rgn_width.max(1);
         let rgn_h = ctx.module.rgn_height.max(1);
+        let sf = (rgn_h as f32 / 480.0).clamp(1.0, 4.0);
 
-        self.height = ctx.module.control_value[1].clamp(10, 120);
-        self.speed = ctx.module.control_value[2].clamp(1, 9);
+        self.height = ((ctx.module.control_value[1].clamp(10, 120) as f32 * sf).round() as i32)
+            .min((rgn_h * 2) / 5);
+        self.speed = ((ctx.module.control_value[2].clamp(1, 9) as f32 * sf).round() as i32)
+            .clamp(1, MARGIN - 1);
         self.shape_choice = ctx.module.control_value[0];
 
         let aspect_x = (ctx.system.aspect_x.max(1)) as u32;

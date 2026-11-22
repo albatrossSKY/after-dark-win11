@@ -307,3 +307,92 @@ pub fn wrap_looney_text(font: &RlepBank, text: &str, max_width: i32, scale: i32)
     }
     lines
 }
+
+/// Fractional-scale Looney Tunes bitmap font renderer (`code - 32` glyph index).
+pub fn draw_looney_text_f(
+    surface: &mut AdSurface,
+    font: &RlepBank,
+    text: &str,
+    x: i32,
+    y: i32,
+    color_override: Option<u32>,
+    scale_f: f32,
+) -> i32 {
+    let scale_f = scale_f.max(0.25);
+    let space_w = font.frames.first().map(|f| f.w.max(4)).unwrap_or(6) as f32 * scale_f;
+    let mut cx = x as f32;
+    for ch in text.chars() {
+        let code = ch as u32;
+        if code == 32 {
+            cx += space_w;
+            continue;
+        }
+        if (33..=126).contains(&code) {
+            let idx = (code - 32) as usize;
+            if let Some(glyph) = font.frames.get(idx) {
+                match color_override {
+                    Some(c) => glyph.blit_solid_color_f(surface, cx.round() as i32, y, c, scale_f),
+                    None => glyph.blit_transformed_f(
+                        surface,
+                        cx.round() as i32,
+                        y,
+                        scale_f,
+                        false,
+                        false,
+                        false,
+                        false,
+                    ),
+                }
+                cx += (glyph.w + 1) as f32 * scale_f;
+            } else {
+                cx += space_w;
+            }
+        } else {
+            cx += space_w;
+        }
+    }
+    (cx.round() as i32) - x
+}
+
+pub fn measure_looney_text_f(font: &RlepBank, text: &str, scale_f: f32) -> i32 {
+    let scale_f = scale_f.max(0.25);
+    let space_w = font.frames.first().map(|f| f.w.max(4)).unwrap_or(6) as f32 * scale_f;
+    let mut w = 0.0f32;
+    for ch in text.chars() {
+        let code = ch as u32;
+        if code == 32 {
+            w += space_w;
+        } else if (33..=126).contains(&code) {
+            if let Some(glyph) = font.frames.get((code - 32) as usize) {
+                w += (glyph.w + 1) as f32 * scale_f;
+            } else {
+                w += space_w;
+            }
+        } else {
+            w += space_w;
+        }
+    }
+    w.round() as i32
+}
+
+pub fn wrap_looney_text_f(font: &RlepBank, text: &str, max_width: i32, scale_f: f32) -> Vec<String> {
+    let mut lines = Vec::new();
+    let mut cur = String::new();
+    for word in text.split_whitespace() {
+        let cand = if cur.is_empty() {
+            word.to_string()
+        } else {
+            format!("{} {}", cur, word)
+        };
+        if !cur.is_empty() && measure_looney_text_f(font, &cand, scale_f) > max_width {
+            lines.push(cur);
+            cur = word.to_string();
+        } else {
+            cur = cand;
+        }
+    }
+    if !cur.is_empty() {
+        lines.push(cur);
+    }
+    lines
+}

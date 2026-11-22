@@ -1,8 +1,9 @@
 //! *Nanites* — 1994 *Star Trek: The Next Generation* After Dark 3.0 Module.
 //!
-//! Wesley Crusher's evolving sub-microscopic nanites (`RLEP #8000`, 48 frames +
-//! `OFst/OFtb #8000`) crawl across your desktop, leave glowing cybernetic circuit
-//! trails, and replicate into a thriving swarm!
+//! Wesley Crusher's evolving sub-microscopic nanites (`OFst/OFtb #8000`)
+//! properly separated into crawling nanites (`f[0..39]`), replicating mitosis
+//! animations (`f[40..79]`), and evolved cybernetic circuit junction nodes
+//! (`f[80..135]`), scaled cleanly for modern HD/4K widescreen displays!
 
 use ad_sdk::{AdContext, AdControl, AdMetadata, AdModule, AdResult};
 
@@ -17,6 +18,7 @@ struct Nanite {
     frame_phase: usize,
     trail_col: u32,
     age: usize,
+    mitosis_ticks: usize, // >0 while actively dividing (plays f[40..79]!)
 }
 
 const NANITE_TRAILS: [u32; 4] = [
@@ -35,7 +37,8 @@ pub struct NanitesModule {
     speed: f32,
     rep_chance: i32,
     tick: usize,
-    scale: i32,
+    scale_f: f32,
+    trail_rad: i32,
 }
 
 impl NanitesModule {
@@ -49,7 +52,8 @@ impl NanitesModule {
             speed: 3.0,
             rep_chance: 50,
             tick: 0,
-            scale: 1,
+            scale_f: 1.0,
+            trail_rad: 1,
         }
     }
 
@@ -89,15 +93,55 @@ impl NanitesModule {
     }
 
     fn spawn_nanite(x: f32, y: f32, speed: f32, rng: &mut ad_sdk::MsvcRand) -> Nanite {
-        let ang = (rng.rand_mod(360) as f32).to_radians();
+        let dir = (rng.rand_mod(8) as f32) * std::f32::consts::FRAC_PI_4;
         Nanite {
             x,
             y,
-            vx: ang.cos() * speed,
-            vy: ang.sin() * speed,
-            frame_phase: rng.rand_mod(128) as usize,
+            vx: dir.cos() * speed,
+            vy: dir.sin() * speed,
+            frame_phase: rng.rand_mod(40) as usize,
             trail_col: NANITE_TRAILS[rng.rand_mod(NANITE_TRAILS.len() as i32) as usize],
             age: 0,
+            mitosis_ticks: 0,
+        }
+    }
+
+    fn stamp_junction_node(&mut self, w: i32, h: i32, cx: i32, cy: i32, node_fi: usize) {
+        let Some(anim) = &self.anim else {
+            return;
+        };
+        let Some(cf) = anim.frames.get(node_fi) else {
+            return;
+        };
+        let s = self.scale_f.round().clamp(1.0, 3.0) as i32;
+        for part in &cf.parts {
+            if let Some(sp) = anim.sprites.get(part.sprite_idx) {
+                let dx0 = cx - (sp.w * s) / 2;
+                let dy0 = cy - (sp.h * s) / 2;
+                for sy in 0..sp.h {
+                    let srow = (sy * sp.w) as usize;
+                    for sx in 0..sp.w {
+                        let c = sp.pixels[srow + sx as usize];
+                        if c == 0 {
+                            continue;
+                        }
+                        let rgb = c & 0x00FF_FFFF;
+                        for oy in 0..s {
+                            let py = dy0 + sy * s + oy;
+                            if py < 0 || py >= h {
+                                continue;
+                            }
+                            let drow = (py * w) as usize;
+                            for ox in 0..s {
+                                let px = dx0 + sx * s + ox;
+                                if px >= 0 && px < w {
+                                    self.canvas_buf[drow + px as usize] = rgb;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -120,13 +164,15 @@ impl AdModule for NanitesModule {
         self.saved_bg = ctx.surface.pixels().to_vec();
         self.clear_screen = ctx.module.raw_control_value[0] != 0;
         let spd_raw = ctx.module.raw_control_value[1].clamp(0, 100);
-        self.speed = 2.0 + (spd_raw as f32 / 100.0) * 4.5;
+        self.speed = 2.2 + (spd_raw as f32 / 100.0) * 4.5;
         self.rep_chance = ctx.module.raw_control_value[2].clamp(0, 100);
-        self.scale = if ctx.surface.width >= 1000 { 2 } else { 1 };
-        self.tick = 0;
 
         let w = ctx.surface.width;
         let h = ctx.surface.height;
+        self.scale_f = (h as f32 / 480.0).clamp(1.0, 2.8);
+        self.trail_rad = (h / 460).clamp(1, 3);
+        self.tick = 0;
+
         self.canvas_buf.resize((w * h) as usize, 0);
         if self.clear_screen || self.saved_bg.len() != self.canvas_buf.len() {
             self.canvas_buf.fill(0x0004_0814);
@@ -134,12 +180,13 @@ impl AdModule for NanitesModule {
             self.canvas_buf.copy_from_slice(&self.saved_bg);
         }
 
+        let init_count = ((w * h) / 65000).clamp(6, 14) as usize;
         self.nanites.clear();
-        for _ in 0..5 {
+        for _ in 0..init_count {
             let x = 40.0 + ctx.rng.rand_mod((w - 80).max(20)) as f32;
             let y = 40.0 + ctx.rng.rand_mod((h - 80).max(20)) as f32;
             self.nanites
-                .push(Self::spawn_nanite(x, y, self.speed * self.scale as f32, ctx.rng));
+                .push(Self::spawn_nanite(x, y, self.speed * self.scale_f, ctx.rng));
         }
         AdResult::NoError
     }
@@ -155,39 +202,48 @@ impl AdModule for NanitesModule {
         let h = ctx.surface.height;
         let wf = w as f32;
         let hf = h as f32;
-        let s = self.scale;
+        let sf = self.scale_f;
+        let tr = self.trail_rad;
 
         let mut babies = Vec::new();
-        let max_nanites = 28usize;
+        let mut junctions = Vec::new();
+        let max_nanites = ((w * h) / 28000).clamp(24, 52) as usize;
         let cur_len = self.nanites.len();
 
         for n in &mut self.nanites {
             n.age += 1;
-            // Subtle right-angle circuit turns like evolving nanites building a computer core!
-            if ctx.rng.rand_mod(28) == 0 {
+            if n.mitosis_ticks > 0 {
+                n.mitosis_ticks -= 1;
+            }
+            // Right-angle / 45-degree circuit turns like evolving nanites building a computer core!
+            if ctx.rng.rand_mod(26) == 0 {
                 let spd = (n.vx * n.vx + n.vy * n.vy).sqrt().max(1.5);
-                let dir = ctx.rng.rand_mod(8) as f32 * (std::f32::consts::FRAC_PI_4);
+                let dir = ctx.rng.rand_mod(8) as f32 * std::f32::consts::FRAC_PI_4;
                 n.vx = dir.cos() * spd;
                 n.vy = dir.sin() * spd;
+                // Stamp an authentic 15x15 evolved cybernetic circuit node (f[80..135]) at circuit turns!
+                junctions.push((n.x as i32, n.y as i32, 80 + (ctx.rng.rand_mod(52) as usize)));
             }
             n.x += n.vx;
             n.y += n.vy;
-            if n.x < 16.0 || n.x > wf - 32.0 {
+            let pad = 20.0 * sf;
+            if n.x < pad || n.x > wf - pad {
                 n.vx = -n.vx;
-                n.x = n.x.clamp(16.0, (wf - 32.0).max(16.0));
+                n.x = n.x.clamp(pad, (wf - pad).max(pad));
             }
-            if n.y < 16.0 || n.y > hf - 32.0 {
+            if n.y < pad || n.y > hf - pad {
                 n.vy = -n.vy;
-                n.y = n.y.clamp(16.0, (hf - 32.0).max(16.0));
+                n.y = n.y.clamp(pad, (hf - pad).max(pad));
             }
 
-            // Leave glowing cybernetic trace on persistent canvas_buf
-            let px = (n.x as i32).clamp(1, (w - 2).max(1));
-            let py = (n.y as i32).clamp(1, (h - 2).max(1));
+            // Leave glowing cybernetic trace scaled cleanly to monitor resolution
+            let px = (n.x as i32).clamp(tr, (w - 1 - tr).max(tr));
+            let py = (n.y as i32).clamp(tr, (h - 1 - tr).max(tr));
             if self.canvas_buf.len() == (w * h) as usize {
-                for oy in -1..=1 {
-                    for ox in -1..=1 {
-                        let ix = ((py + oy) * w + (px + ox)) as usize;
+                for oy in -tr..=tr {
+                    let drow = ((py + oy) * w) as usize;
+                    for ox in -tr..=tr {
+                        let ix = drow + (px + ox) as usize;
                         if ix < self.canvas_buf.len() {
                             self.canvas_buf[ix] = n.trail_col;
                         }
@@ -195,15 +251,20 @@ impl AdModule for NanitesModule {
                 }
             }
 
-            // Replicate when mature according to Replication slider!
+            // Replicate cleanly with mitosis animation (f[40..79])!
             if self.rep_chance >= 20
                 && cur_len + babies.len() < max_nanites
-                && n.age > 40
-                && ctx.rng.rand_mod(220) < self.rep_chance / 3
+                && n.age > 36
+                && ctx.rng.rand_mod(200) < self.rep_chance / 3
             {
                 n.age = 0;
-                babies.push(Self::spawn_nanite(n.x, n.y, self.speed * s as f32, ctx.rng));
+                n.mitosis_ticks = 18;
+                babies.push(Self::spawn_nanite(n.x, n.y, self.speed * sf, ctx.rng));
             }
+        }
+
+        for (jx, jy, jfi) in junctions {
+            self.stamp_junction_node(w, h, jx, jy, jfi);
         }
 
         if !babies.is_empty() {
@@ -220,20 +281,29 @@ impl AdModule for NanitesModule {
             ctx.surface.pixels_mut().copy_from_slice(&self.canvas_buf);
         }
 
-        // Draw animated nanites from RLEP #8000 / OFtb #8000
+        // Render crawling nanites (f[0..39]) and active dividing nanites (f[40..79]) cleanly!
         if let Some(anim) = &self.anim {
-            let n_frames = anim.frames.len().max(1);
+            let n_total = anim.frames.len().max(1);
             for n in &self.nanites {
-                let fi = (self.tick / 2 + n.frame_phase) % n_frames;
-                anim.draw_frame(
-                    ctx.surface,
-                    fi,
-                    n.x as i32 - 18 * s,
-                    n.y as i32 - 20 * s,
-                    s,
-                    n.vx < 0.0,
-                    false,
-                );
+                let fi = if n.mitosis_ticks > 0 && n_total >= 80 {
+                    40 + ((18 - n.mitosis_ticks) * 2) % 40
+                } else {
+                    (self.tick / 2 + n.frame_phase) % 40.min(n_total)
+                };
+                if let Some(cf) = anim.frames.get(fi) {
+                    let fw = ((cf.right - cf.left).max(1) as f32 * sf).round() as i32;
+                    let fh = ((cf.bottom - cf.top).max(1) as f32 * sf).round() as i32;
+                    anim.draw_frame_f(
+                        ctx.surface,
+                        fi,
+                        n.x as i32 - fw / 2,
+                        n.y as i32 - fh / 2,
+                        sf,
+                        n.vx < 0.0,
+                        true,
+                        false,
+                    );
+                }
                 put_px(ctx.surface, n.x as i32, n.y as i32, 0x00FF_FFFF);
             }
         }

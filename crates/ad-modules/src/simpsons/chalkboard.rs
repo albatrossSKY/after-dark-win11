@@ -192,7 +192,8 @@ impl ChalkboardModule {
     fn draw_chalkboard_bg(&self, surface: &mut ad_sdk::canvas::AdSurface) {
         let w = surface.width;
         let h = surface.height;
-        let tray_h = (h / 18).clamp(14, 28);
+        let sf = (h as f32 / 480.0).clamp(0.75, 4.0);
+        let tray_h = (26.0 * sf).round().clamp(14.0, 96.0) as i32;
         let board_h = (h - tray_h).max(1);
 
         // Classic dark slate-green chalkboard with subtle chalk dust mottling
@@ -211,17 +212,39 @@ impl ChalkboardModule {
             }
         }
 
-        // Wooden frame trim & chalk rail at bottom
-        fill_rect_px(surface, 0, board_h, w, board_h + 3, 0x00A6_7240);
-        fill_rect_px(surface, 0, board_h + 3, w, h, 0x006E_4622);
-        fill_rect_px(surface, 0, h - 3, w, h, 0x0046_2A12);
+        // Wooden frame trim & chalk rail at bottom (proportionally scaled for HD/4K)
+        let trim = (3.5 * sf).round().max(2.0) as i32;
+        fill_rect_px(surface, 0, board_h, w, board_h + trim, 0x00A6_7240);
+        fill_rect_px(surface, 0, board_h + trim, w, h, 0x006E_4622);
+        fill_rect_px(surface, 0, h - trim, w, h, 0x0046_2A12);
 
-        // Little white chalk pieces and felt eraser resting on the rail
-        let ey = board_h - 4;
-        fill_rect_px(surface, w / 5, ey + 2, w / 5 + 42, board_h + 4, 0x0024_2428);
-        fill_rect_px(surface, w / 5 + 2, ey - 2, w / 5 + 40, ey + 2, 0x00D8_9650);
-        fill_rect_px(surface, (w * 3) / 5, board_h - 1, (w * 3) / 5 + 26, board_h + 3, 0x00EC_ECE6);
-        fill_rect_px(surface, (w * 3) / 5 + 40, board_h, (w * 3) / 5 + 58, board_h + 3, 0x00DF_DFD8);
+        // Felt eraser & white chalk sticks resting on the rail
+        let ew = (44.0 * sf).round() as i32;
+        let eh_felt = (6.0 * sf).round().max(3.0) as i32;
+        let eh_wood = (5.0 * sf).round().max(3.0) as i32;
+        let ex = w / 5;
+        fill_rect_px(surface, ex, board_h - eh_felt + trim, ex + ew, board_h + trim, 0x0024_2428);
+        fill_rect_px(
+            surface,
+            ex + (2.0 * sf) as i32,
+            board_h - eh_felt - eh_wood + trim,
+            ex + ew - (2.0 * sf) as i32,
+            board_h - eh_felt + trim,
+            0x00D8_9650,
+        );
+        let cw1 = (28.0 * sf).round() as i32;
+        let cw2 = (20.0 * sf).round() as i32;
+        let ch = (4.0 * sf).round().max(2.0) as i32;
+        let cx0 = (w * 3) / 5;
+        fill_rect_px(surface, cx0, board_h - ch + trim, cx0 + cw1, board_h + trim, 0x00EC_ECE6);
+        fill_rect_px(
+            surface,
+            cx0 + (42.0 * sf) as i32,
+            board_h - ch + trim + 1,
+            cx0 + (42.0 * sf) as i32 + cw2,
+            board_h + trim,
+            0x00DF_DFD8,
+        );
     }
 
     fn build_board_strokes(&mut self, width: i32, height: i32, rng: &mut MsvcRand) {
@@ -238,9 +261,12 @@ impl ChalkboardModule {
         let (tag, base_body) = script.messages[self.msg_index % script.messages.len()].clone();
         self.special_tag = tag;
 
-        let tray_h = (height / 18).clamp(14, 28);
-        let usable_h = (height - tray_h - 28).max(80) as f32;
-        let usable_w = (width - 44).max(160) as f32;
+        let sf = (height as f32 / 480.0).clamp(0.75, 4.0);
+        let tray_h = (26.0 * sf).round().clamp(14.0, 96.0) as i32;
+        let margin_x = (28.0 * sf).round();
+        let margin_y = (22.0 * sf).round();
+        let usable_h = (height - tray_h - margin_y as i32 * 2).max(80) as f32;
+        let usable_w = (width - margin_x as i32 * 2).max(160) as f32;
 
         // First measure a single repetition in script units to compute clean uniform scale
         let mut measure_segs = Vec::new();
@@ -263,7 +289,10 @@ impl ChalkboardModule {
             .fold(1400.0f32, |a, s| a.max(s.x0).max(s.x1));
         let max_u_y = my + 125.0;
 
-        let target_scale = (usable_w / (max_u_x + 120.0)).min(usable_h / (max_u_y * 4.5)).clamp(0.14, 0.36);
+        // Scale cleanly for any resolution from 640x480 up to 4K/ultrawide without CRT cap!
+        let target_scale = (usable_w / (max_u_x + 100.0))
+            .min(usable_h / (max_u_y * 4.8))
+            .clamp(0.14 * sf, 0.44 * sf);
         let line_pitch_px = (max_u_y + 38.0) * target_scale;
         let max_fit_lines = ((usable_h / line_pitch_px.max(18.0)) as usize).clamp(1, 14);
 
@@ -277,8 +306,8 @@ impl ChalkboardModule {
             max_fit_lines
         };
 
-        let left_margin = 22.0f32;
-        let top_margin = 18.0f32;
+        let left_margin = margin_x;
+        let top_margin = margin_y;
         let mut cur_y_px = top_margin;
 
         for line_idx in 0..repeat_lines {
@@ -566,7 +595,8 @@ impl AdModule for ChalkboardModule {
             BoardState::Writing => {
                 // Draw 5–8 stroke segments per frame so Bart writes briskly and legibly!
                 let steps = if self.special_tag == 7 { 9 } else { 6 };
-                let thick = if ctx.surface.width >= 900 { 3 } else { 2 };
+                let sf = (ctx.surface.height as f32 / 480.0).clamp(0.75, 4.0);
+                let thick = (2.4 * sf).round().clamp(2.0, 9.0) as i32;
                 for _ in 0..steps {
                     if self.seg_cursor >= self.segments.len() {
                         self.state = BoardState::PauseAfterBoard;
@@ -590,8 +620,9 @@ impl AdModule for ChalkboardModule {
                     );
                     // Tiny chalk dust speckles along the stroke
                     if ctx.rng.rand_mod(3) == 0 {
-                        let mx = ((seg.x0 + seg.x1) * 0.5) as i32 + ctx.rng.rand_mod(5) - 2;
-                        let my = ((seg.y0 + seg.y1) * 0.5) as i32 + ctx.rng.rand_mod(5) - 2;
+                        let spread = (5.0 * sf).round().max(3.0) as i32;
+                        let mx = ((seg.x0 + seg.x1) * 0.5) as i32 + ctx.rng.rand_mod(spread) - spread / 2;
+                        let my = ((seg.y0 + seg.y1) * 0.5) as i32 + ctx.rng.rand_mod(spread) - spread / 2;
                         put_px(ctx.surface, mx, my, 0x00A8_B4A8);
                     }
 
@@ -622,7 +653,8 @@ impl AdModule for ChalkboardModule {
             BoardState::Erasing => {
                 let w = ctx.surface.width;
                 let h = ctx.surface.height;
-                let tray_h = (h / 18).clamp(14, 28);
+                let sf = (h as f32 / 480.0).clamp(0.75, 4.0);
+                let tray_h = (26.0 * sf).round().clamp(14.0, 96.0) as i32;
                 let board_h = (h - tray_h).max(1);
                 let swipe_w = (w / 18).max(16);
                 let x0 = self.erase_x;
@@ -631,7 +663,9 @@ impl AdModule for ChalkboardModule {
                 fill_rect_px(ctx.surface, x0, 0, x1, board_h, 0x001B_442F);
                 // Felt eraser block leading edge
                 if x1 < w {
-                    fill_rect_px(ctx.surface, x1 - 4, board_h / 3, x1 + 8, board_h / 3 + 48, 0x00C8_8A48);
+                    let ew = (12.0 * sf).round().max(6.0) as i32;
+                    let eh = (52.0 * sf).round().max(28.0) as i32;
+                    fill_rect_px(ctx.surface, x1 - ew / 3, board_h / 3, x1 + ew, board_h / 3 + eh, 0x00C8_8A48);
                 }
                 self.erase_x = x1;
                 if self.erase_x >= w {

@@ -1,15 +1,15 @@
 //! "Rabbitron" — Classic 1995 *Looney Tunes* After Dark 3.0 module.
 //!
-//! Bugs Bunny and Elmer Fudd play the game of life—complete with doors around
-//! the perimeter of the screen, train tracks, pies, explosions, and a live
-//! scoreboard (`OFst #1000`, 1,861 compound frames across `RLEP #1000..#1005`),
-//! accompanied by Liszt's *Hungarian Rhapsody #2* (`#120`) or *Can-Can* (`#50`)
-//! and digitized Bugs Bunny & Elmer Fudd voices (`BUGS_VOICES`).
+//! Full-widescreen retro arcade arena where Bugs Bunny and Elmer Fudd battle
+//! across perimeter doors, diagonal train tracks, pies, and live arcade high
+//! scores (`OFst #1000`, smoothly scaled for HD/4K monitors) with Liszt's
+//! *Hungarian Rhapsody #2* (`#120`) or *Can-Can* (`#50`) and cast voices.
 
 use ad_sdk::{AdContext, AdControl, AdMetadata, AdModule, AdResult};
 
 use crate::looney::{
-    BUGS_VOICES, MOD_RABBITRON, SONG_CAN_CAN, SONG_HUNGARIAN_RHAPSODY, load_anim, looney_pack,
+    BUGS_VOICES, MOD_RABBITRON, SONG_CAN_CAN, SONG_HUNGARIAN_RHAPSODY, advance_filtered_range,
+    load_anim, looney_pack,
 };
 use crate::simpsons::{CompoundAnim, music_loops_from_slider};
 
@@ -24,7 +24,7 @@ pub struct RabbitronModule {
 impl RabbitronModule {
     pub fn new() -> Self {
         Self {
-            music_raw: 16,
+            music_raw: 25,
             anim: None,
             bugs_frame: 25,
             elmer_frame: 200,
@@ -42,7 +42,7 @@ impl RabbitronModule {
             controls: [
                 AdControl::LabeledSlider {
                     title: "Music:".to_string(),
-                    default_raw: 16,
+                    default_raw: 25,
                     labels: vec![
                         "Never".into(),
                         "Once".into(),
@@ -86,7 +86,7 @@ impl AdModule for RabbitronModule {
         self.elmer_frame = 200;
         ctx.surface.pixels_mut().fill(0x0016_1C2E);
 
-        if let Some(loops) = music_loops_from_slider(self.music_raw.max(25)) {
+        if let Some(loops) = music_loops_from_slider(self.music_raw) {
             let song = if ctx.rng.rand_mod(2) == 0 {
                 SONG_HUNGARIAN_RHAPSODY
             } else {
@@ -109,74 +109,77 @@ impl AdModule for RabbitronModule {
 
         let w = ctx.surface.width;
         let h = ctx.surface.height;
-        ctx.surface.pixels_mut().fill(0x0016_1C2E);
+        let sf = (h as f32 / 480.0).clamp(1.0, 3.6);
+        let pad = (12.0 * sf).round() as i32;
+        ctx.surface.pixels_mut().fill(0x0014_1A2C);
 
         let Some(anim) = &self.anim else {
             return AdResult::NoError;
         };
 
-        // 1. Scoreboard header banner (`w2=208` left half + `w2=209` right half)
+        // 1. Arcade Scoreboard header banners (`w2=213` left + `w2=214` right), scaled proportionally!
         if let (Some(b_left), Some(b_right)) = (anim.sprites.get(213), anim.sprites.get(214)) {
-            b_left.blit(ctx.surface, 0, 4);
-            b_right.blit(ctx.surface, w - b_right.w, 4);
-        } else if let Some(banner) = anim.sprites.get(208) {
-            banner.blit(ctx.surface, 0, 4);
-            if let Some(b2) = anim.sprites.get(209) {
-                b2.blit(ctx.surface, w - b2.w, 4);
-            }
+            let bsf = sf.min((w as f32 * 0.44) / (b_left.w.max(b_right.w).max(1) as f32));
+            let lw = (b_left.w as f32 * bsf).round() as i32;
+            let lh = (b_left.h as f32 * bsf).round() as i32;
+            let rw = (b_right.w as f32 * bsf).round() as i32;
+            let rh = (b_right.h as f32 * bsf).round() as i32;
+            b_left.blit_rect(ctx.surface, pad, pad / 2, lw, lh, false, false, false, false);
+            b_right.blit_rect(ctx.surface, w - rw - pad, pad / 2, rw, rh, false, false, false, false);
         }
 
-        // 2. Perimeter doors (`w2=0` vertical door `75x133`, `w2=4` horizontal door `133x75`) & train track (`w2=15`)
+        // 2. Perimeter doors (`w2=0` vertical door, `w2=4` horizontal door) & train track (`w2=15`)
         if let Some(track) = anim.sprites.get(15) {
-            track.blit(ctx.surface, (w - track.w) / 2, (h - track.h) / 2 + 20);
+            let tw = (track.w as f32 * sf).round() as i32;
+            let th = (track.h as f32 * sf).round() as i32;
+            track.blit_rect(ctx.surface, (w - tw) / 2, (h - th) / 2 + (16.0 * sf) as i32, tw, th, false, false, true, false);
         }
         if let Some(vdoor) = anim.sprites.first() {
-            vdoor.blit(ctx.surface, 12, h / 2 - vdoor.h / 2);
-            vdoor.blit(ctx.surface, w - vdoor.w - 12, h / 2 - vdoor.h / 2);
+            let vw = (vdoor.w as f32 * sf).round() as i32;
+            let vh = (vdoor.h as f32 * sf).round() as i32;
+            vdoor.blit_rect(ctx.surface, pad, h / 2 - vh / 2, vw, vh, false, false, true, false);
+            vdoor.blit_rect(ctx.surface, w - vw - pad, h / 2 - vh / 2, vw, vh, false, false, true, false);
         }
         if let Some(hdoor) = anim.sprites.get(4) {
-            hdoor.blit(ctx.surface, w / 2 - hdoor.w / 2, h - hdoor.h - 8);
+            let hw = (hdoor.w as f32 * sf).round() as i32;
+            let hh = (hdoor.h as f32 * sf).round() as i32;
+            hdoor.blit_rect(ctx.surface, w / 2 - hw / 2, h - hh - pad / 2, hw, hh, false, false, true, false);
         }
         if let Some(train) = anim.sprites.get(14) {
-            let tpos = ((self.tick * 3) as i32) % 220;
-            train.blit(
+            let span = (260.0 * sf).round().max(120.0) as i32;
+            let tpos = ((self.tick as f32 * 3.0 * sf) as i32) % span;
+            train.blit_transformed_f(
                 ctx.surface,
-                w / 2 - 110 + tpos,
-                h / 2 - 70 + (tpos * 2) / 3,
+                w / 2 - span / 2 + tpos,
+                h / 2 - (70.0 * sf) as i32 + (tpos * 2) / 3,
+                sf * 1.2,
+                false,
+                false,
+                true,
+                false,
             );
         }
 
-        // 3. Advance Bugs Bunny & Elmer Fudd compound animations (`OFst #1000`, filtered to character poses)
+        // 3. Smoothly scaled Bugs Bunny & Elmer Fudd compound animations (`OFst #1000`)
         let n_frames = anim.frames.len().saturating_sub(1);
-        self.bugs_frame = crate::looney::advance_filtered_range(
-            anim,
-            self.bugs_frame,
-            1,
-            390.min(n_frames),
-            45,
-            55,
-            165,
-            175,
-        );
-        self.elmer_frame = crate::looney::advance_filtered_range(
-            anim,
-            self.elmer_frame,
-            150,
-            n_frames,
-            45,
-            55,
-            165,
-            175,
-        );
+        self.bugs_frame = advance_filtered_range(anim, self.bugs_frame, 1, 390.min(n_frames), 45, 55, 165, 175);
+        self.elmer_frame = advance_filtered_range(anim, self.elmer_frame, 150, n_frames, 45, 55, 165, 175);
 
-        anim.draw_anchored_bottom(ctx.surface, self.bugs_frame, w / 2 - 120, h - 78, 1, false);
-        anim.draw_anchored_bottom(ctx.surface, self.elmer_frame, w / 2 + 120, h - 78, 1, false);
+        let char_sf = (sf * 1.35).clamp(1.1, 4.0);
+        let ground_y = h - (82.0 * sf).round() as i32;
+        anim.draw_anchored_bottom_f(ctx.surface, self.bugs_frame, w / 2 - (w / 5), ground_y, char_sf, false, true, false);
+        anim.draw_anchored_bottom_f(ctx.surface, self.elmer_frame, w / 2 + (w / 5), ground_y, char_sf, false, true, false);
 
         if self.tick % 80 == 0 {
             let vid = BUGS_VOICES[(self.tick as usize / 80) % BUGS_VOICES.len()];
             looney_pack().play_voice(ctx.sound, ctx.system.sound_enabled, vid);
         }
 
+        AdResult::NoError
+    }
+
+    fn do_close(&mut self, ctx: &mut AdContext<'_>) -> AdResult {
+        ctx.sound.stop_all();
         AdResult::NoError
     }
 }

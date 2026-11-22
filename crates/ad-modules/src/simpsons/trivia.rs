@@ -9,8 +9,9 @@ use ad_sdk::{AdContext, AdControl, AdMetadata, AdModule, AdResult};
 
 use super::{
     CompoundAnim, KIND_QERY, MOD_TRIVIA, RlepBank, SND_DETONATE, SND_HOMER_DOH, SND_RIGHT_ANS,
-    SND_SIREN, SND_TINY_BEEP1, SND_TINY_BEEP2, SND_WRONG_ANS, SimpsonsPack, draw_bitmap_text,
-    draw_line_px, fill_circle_px, fill_rect_px, mac_roman_to_string, wrap_bitmap_text,
+    SND_SIREN, SND_TINY_BEEP1, SND_TINY_BEEP2, SND_WRONG_ANS, SimpsonsPack, draw_bitmap_text_f,
+    draw_line_px, draw_rect_outline_px, fill_circle_px, fill_rect_px, mac_roman_to_string,
+    wrap_bitmap_text_f,
 };
 
 struct TriviaQuestion {
@@ -47,7 +48,6 @@ enum TriviaPhase {
 
 pub struct SimpsonsTriviaModule {
     bg_bank: RlepBank,
-    fx_bank: RlepBank,
     font: RlepBank,
     anim: Option<CompoundAnim>,
     questions: Vec<TriviaQuestion>,
@@ -67,10 +67,6 @@ impl SimpsonsTriviaModule {
     pub fn new() -> Self {
         Self {
             bg_bank: RlepBank {
-                frames: Vec::new(),
-                palette: Vec::new(),
-            },
-            fx_bank: RlepBank {
                 frames: Vec::new(),
                 palette: Vec::new(),
             },
@@ -139,7 +135,6 @@ impl SimpsonsTriviaModule {
             return;
         }
         self.bg_bank = RlepBank::load(MOD_TRIVIA, 12000);
-        self.fx_bank = RlepBank::load(MOD_TRIVIA, 12001);
         self.font = RlepBank::load(MOD_TRIVIA, 12100);
         self.anim = Some(CompoundAnim::load(MOD_TRIVIA, 12000));
 
@@ -166,6 +161,134 @@ impl SimpsonsTriviaModule {
         }
     }
 
+    fn draw_sector7g_wing(
+        &self,
+        surface: &mut ad_sdk::canvas::AdSurface,
+        x0: i32,
+        x1: i32,
+        h: i32,
+        sf: f32,
+        is_right: bool,
+    ) {
+        let wing_w = x1 - x0;
+        if wing_w < 12 {
+            return;
+        }
+        // Matching Sector 7-G steel wall + hazard yellow/black stripe + blinking reactor status bay
+        let desk_y = (h as f32 * 0.72) as i32;
+        fill_rect_px(surface, x0, 0, x1, desk_y, 0x004A_545E);
+        fill_rect_px(surface, x0, desk_y, x1, h, 0x0034_3C44);
+
+        // Caution hazard band across the wall
+        let stripe_y0 = (h as f32 * 0.10) as i32;
+        let stripe_h = (16.0 * sf).round().max(10.0) as i32;
+        let sw = (14.0 * sf).round().max(8.0) as i32;
+        let w_full = surface.width;
+        {
+            let dst = surface.pixels_mut();
+            for y in stripe_y0..(stripe_y0 + stripe_h).min(h) {
+                let row = (y * w_full) as usize;
+                for x in x0..x1 {
+                    let diag = ((x + y) / sw) & 1;
+                    dst[row + x as usize] = if diag == 0 { 0x00E4_B820 } else { 0x001E_2226 };
+                }
+            }
+        }
+        fill_rect_px(surface, x0, desk_y - 3, x1, desk_y + 2, 0x0022_282E);
+
+        // Recessed auxiliary Sector 7-G instrumentation panel if wing is wide enough
+        let pad = (12.0 * sf).round().max(6.0) as i32;
+        if wing_w >= pad * 2 + 42 {
+            let px0 = x0 + pad;
+            let px1 = x1 - pad;
+            let py0 = stripe_y0 + stripe_h + pad;
+            let py1 = desk_y - pad;
+            fill_rect_px(surface, px0, py0, px1, py1, 0x002B_323A);
+            draw_rect_outline_px(surface, px0, py0, px1, py1, 0x0018_1C22, 2);
+
+            // Blinking reactor indicator lights array
+            let cols = ((px1 - px0 - 16) / ((18.0 * sf) as i32).max(12)).clamp(2, 5);
+            let rows = 3;
+            let rad = (5.0 * sf).round().max(3.0) as i32;
+            let step_x = (px1 - px0) / (cols + 1);
+            let step_y = ((py1 - py0) / 2) / (rows + 1);
+            for r in 0..rows {
+                for c in 0..cols {
+                    let lx = px0 + step_x * (c + 1);
+                    let ly = py0 + step_y * (r + 1);
+                    let idx = (r * cols + c + if is_right { 7 } else { 0 }) as usize;
+                    let on = ((self.tick / 5 + idx * 3) % 7) < 4;
+                    let col = if self.phase == TriviaPhase::Meltdown {
+                        if (self.tick / 2 + idx) % 2 == 0 {
+                            0x00FF_2820
+                        } else {
+                            0x0058_1010
+                        }
+                    } else if on {
+                        match idx % 3 {
+                            0 => 0x0038_E858,
+                            1 => 0x00FF_D028,
+                            _ => 0x00E8_3830,
+                        }
+                    } else {
+                        0x001A_2026
+                    };
+                    fill_circle_px(surface, lx, ly, rad, col);
+                }
+            }
+
+            // Sector 7-G / Safety plaque below the indicator bank
+            let box_y0 = py0 + (py1 - py0) / 2 + 4;
+            let box_y1 = py1 - 8;
+            if box_y1 - box_y0 > 26 {
+                let bx0 = px0 + 6;
+                let bx1 = px1 - 6;
+                fill_rect_px(surface, bx0, box_y0, bx1, box_y1, 0x0018_1E24);
+                draw_rect_outline_px(surface, bx0, box_y0, bx1, box_y1, 0x0064_707C, 1);
+                let l1 = if is_right { "CORE" } else { "SECTOR 7G" };
+                let l2 = if is_right {
+                    if self.phase == TriviaPhase::Meltdown {
+                        "MELTDOWN"
+                    } else {
+                        "NOMINAL"
+                    }
+                } else {
+                    "SAFETY OK"
+                };
+                let c2 = if self.phase == TriviaPhase::Meltdown {
+                    0x00FF_3830
+                } else {
+                    0x0058_FF78
+                };
+                let inner_w = (bx1 - bx0 - 8).max(20);
+                let raw_w = super::measure_bitmap_text_f(&self.font, l1, 1.0)
+                    .max(super::measure_bitmap_text_f(&self.font, l2, 1.0))
+                    .max(1) as f32;
+                let label_sf = (inner_w as f32 / raw_w).min(sf * 0.72).clamp(0.45, 2.0);
+                let w1 = super::measure_bitmap_text_f(&self.font, l1, label_sf);
+                let w2 = super::measure_bitmap_text_f(&self.font, l2, label_sf);
+                draw_bitmap_text_f(
+                    surface,
+                    &self.font,
+                    l1,
+                    bx0 + ((bx1 - bx0 - w1) / 2).max(4),
+                    box_y0 + (10.0 * sf) as i32,
+                    Some(0x00FF_D838),
+                    label_sf,
+                );
+                draw_bitmap_text_f(
+                    surface,
+                    &self.font,
+                    l2,
+                    bx0 + ((bx1 - bx0 - w2) / 2).max(4),
+                    box_y0 + (26.0 * sf) as i32,
+                    Some(c2),
+                    label_sf,
+                );
+            }
+        }
+    }
+
     fn render_scene(&self, surface: &mut ad_sdk::canvas::AdSurface) {
         let w = surface.width;
         let h = surface.height;
@@ -176,71 +299,147 @@ impl SimpsonsTriviaModule {
         }
         let q = &self.questions[self.order[self.q_cursor % self.order.len()]];
 
-        if self.text_only || w < 520 || h < 360 {
-            // Crisp green phosphor CRT terminal view (also great in small preview windows)
-            let scale = if w >= 1000 { 2 } else { 1 };
-            let pad = 18 * scale;
+        if self.text_only || w < 380 || h < 260 {
+            // Crisp green phosphor CRT terminal view scaled smoothly for HD/4K
+            let sf = (h as f32 / 360.0).clamp(0.85, 3.8);
+            let pad = (18.0 * sf).round() as i32;
             fill_rect_px(surface, pad, pad, w - pad, h - pad, 0x0006_180A);
+            draw_rect_outline_px(surface, pad, pad, w - pad, h - pad, 0x0028_6838, 2);
             let max_w = (w - pad * 4).max(120);
-            let mut y = pad + 14 * scale;
-            draw_bitmap_text(
+            let mut y = pad + (16.0 * sf).round() as i32;
+            draw_bitmap_text_f(
                 surface,
                 &self.font,
                 "E-FISSION-CY 1000 TRIVIA TERMINAL",
-                pad + 12 * scale,
+                pad + (14.0 * sf).round() as i32,
                 y,
                 Some(0x00FF_D838),
-                scale,
+                sf * 1.1,
             );
-            y += 22 * scale;
-            self.draw_crt_question(surface, q, pad + 12 * scale, y, max_w, scale);
+            y += (24.0 * sf).round() as i32;
+            self.draw_crt_question(surface, q, pad + (14.0 * sf).round() as i32, y, max_w, sf);
             return;
         }
 
-        // Authentic Sector 7-G 640x480 stage centered on screen (scaled 2x on >= 1280x960!)
-        let scale = if w >= 1280 && h >= 960 { 2 } else { 1 };
-        let stage_w = 640 * scale;
-        let stage_h = 480 * scale;
-        let ox = (w - stage_w) / 2;
-        let oy = (h - stage_h) / 2;
+        // Continuous widescreen HD/4K fit of the authentic 640x480 Sector 7-G console!
+        let (sf, ox_f, oy_f) = crate::tng::stage_fit(w, h, 640.0, 480.0, 0, 0);
+        let ox = ox_f.round() as i32;
+        let oy = oy_f.round() as i32;
+        let stage_w = (640.0 * sf).round() as i32;
+        let sc = |v: i32| (v as f32 * sf).round() as i32;
+
+        // Flanking widescreen Sector 7-G Nuclear Power Plant control bays (no black side bars!)
+        if ox > 0 {
+            self.draw_sector7g_wing(surface, 0, ox, h, sf, false);
+        }
+        if ox + stage_w < w {
+            self.draw_sector7g_wing(surface, ox + stage_w, w, h, sf, true);
+        }
 
         // 1. Background Sector 7-G wall & control desk (#12000[0])
         if let Some(bg) = self.bg_bank.frames.first() {
-            bg.blit_scaled(surface, ox, oy, scale);
+            bg.blit_transformed_f(surface, ox, oy, sf, false, false, false, false);
         }
         // 2. E-Fission-Cy 1000 CRT monitor unit (#12000[1] at stage (145, 116))
         if let Some(crt) = self.bg_bank.frames.get(1) {
-            crt.blit_scaled(surface, ox + 145 * scale, oy + 116 * scale, scale);
+            crt.blit_transformed_f(
+                surface,
+                ox + sc(145),
+                oy + sc(116),
+                sf,
+                false,
+                false,
+                false,
+                false,
+            );
         }
 
-        // 3. Flashing control-board indicator lights from OFtb / fx_bank
+        // 3. Authentic Sector 7-G animated console decorations & indicators (OFst #12000):
+        //    - R14 (101): Simpson family photo taped bottom-left
+        //    - R13 (85):  "BUY PONY" sticky note
+        //    - R16 (108..=110): Safety counter flip card
+        //    - R02 (5..=8): Normal glowing console indicator lights (NEVER sparking 9..=28 unless Meltdown!)
+        //    - R11 (64..=81): Animated pressure/radiation red needle on left gauge!
+        //    - R03 (29..=38): Occasional radioactive green ooze dripping from ceiling pipe!
+        //    - R10 (61..=63): Occasional glowing green spider descending on web!
         if let Some(anim) = &self.anim {
-            let light_idx = 6 + (self.tick / 4) % 8;
-            if light_idx < anim.frames.len() {
-                anim.draw_stage_frame(surface, light_idx, ox, oy, scale);
+            let draw_ofst = |s: &mut ad_sdk::canvas::AdSurface, idx: usize| {
+                if idx < anim.frames.len() {
+                    anim.draw_stage_frame_f(s, idx, ox_f, oy_f, sf, false, false);
+                }
+            };
+            // Static wall/console character props (bg_bank[0] already has the upper-right yellow poster)
+            draw_ofst(surface, 101); // Family photo
+            draw_ofst(surface, 85);  // "BUY PONY" sticky note
+            let flip_digit = 108 + ((self.wrong_count as usize) % 3);
+            draw_ofst(surface, flip_digit);
+
+            // Animated red needle on left Sector 7-G gauge (R11: 64..=81)
+            let temp_frac = (self.wrong_count as f32 / self.meltdown_limit.max(1) as f32).clamp(0.0, 1.0);
+            let jitter = ((self.tick as f32 * 0.25).sin() * 1.5).round() as i32;
+            let needle_off = ((temp_frac * 15.0).round() as i32 + jitter).clamp(0, 17) as usize;
+            draw_ofst(surface, 64 + needle_off);
+
+            // Periodic radioactive ceiling drip (R03: 29..=38)
+            let drip_cycle = self.tick % 96;
+            if drip_cycle < 20 {
+                draw_ofst(surface, 29 + (drip_cycle / 2).min(9));
             }
-            // Blinking right-side safety indicators
-            let r_idx = 42 + (self.tick / 5) % 12;
-            if r_idx < anim.frames.len() {
-                anim.draw_stage_frame(surface, r_idx, ox, oy, scale);
+            // Periodic radioactive green spider cameo (R10: 61..=63)
+            let spider_cycle = (self.tick + 40) % 140;
+            if spider_cycle < 18 {
+                let sp_step = if spider_cycle < 9 {
+                    (spider_cycle / 3).min(2)
+                } else {
+                    ((17 - spider_cycle) / 3).min(2)
+                };
+                draw_ofst(surface, 61 + sp_step);
+            }
+
+            if self.phase == TriviaPhase::Meltdown {
+                // Full Sector 7-G Meltdown! Flashing alarm strobe, shattering Krusty gauge, exploding buttons!
+                if (self.tick / 2) % 2 == 0 {
+                    draw_ofst(surface, 39); // Orange rotating emergency strobe light
+                }
+                draw_ofst(surface, 9 + ((self.tick / 2) % 20));  // Sparking left indicator buttons
+                draw_ofst(surface, 41 + ((self.tick / 2) % 8));  // Shattering Krusty clock gauge
+                draw_ofst(surface, 49 + ((self.tick / 2) % 7));  // Exploding right green warning button
+            } else {
+                // Calm normal indicator lights cycling gently across the 4 left console buttons (5..=8)
+                let light_idx = 5 + ((self.tick / 8) % 4);
+                draw_ofst(surface, light_idx);
             }
         }
 
         // 4. Core temperature gauge needle (centered right on the CORE TEMPERATURE dial at stage (556, 444))
-        let gauge_cx = ox + 556 * scale;
-        let gauge_cy = oy + 444 * scale;
+        let gauge_cx = ox + sc(556);
+        let gauge_cy = oy + sc(444);
         let frac = (self.wrong_count as f32 / self.meltdown_limit.max(1) as f32).clamp(0.0, 1.0);
         let angle = std::f32::consts::PI * (0.92 - frac * 0.84);
-        let nx = gauge_cx + (angle.cos() * 32.0 * scale as f32) as i32;
-        let ny = gauge_cy - (angle.sin() * 32.0 * scale as f32) as i32;
-        draw_line_px(surface, gauge_cx, gauge_cy, nx, ny, 0x0010_1010, 2 * scale);
-        fill_circle_px(surface, gauge_cx, gauge_cy, 4 * scale, 0x00E8_2020);
+        let nx = gauge_cx + (angle.cos() * 32.0 * sf) as i32;
+        let ny = gauge_cy - (angle.sin() * 32.0 * sf) as i32;
+        draw_line_px(
+            surface,
+            gauge_cx,
+            gauge_cy,
+            nx,
+            ny,
+            0x0010_1010,
+            (2.2 * sf).round().max(2.0) as i32,
+        );
+        fill_circle_px(
+            surface,
+            gauge_cx,
+            gauge_cy,
+            (4.0 * sf).round().max(3.0) as i32,
+            0x00E8_2020,
+        );
 
         // 5. CRT screen glass area inside E-Fission-Cy 1000: stage (178, 146) .. (456, 356)
-        let crt_x = ox + 178 * scale;
-        let crt_y = oy + 146 * scale;
-        let crt_w = 278 * scale;
-        let crt_h = 210 * scale;
+        let crt_x = ox + sc(178);
+        let crt_y = oy + sc(146);
+        let crt_w = sc(278);
+        let crt_h = sc(210);
 
         if self.phase == TriviaPhase::Meltdown {
             let flash = if (self.tick / 3) % 2 == 0 {
@@ -249,36 +448,40 @@ impl SimpsonsTriviaModule {
                 0x00FF_7010
             };
             fill_rect_px(surface, crt_x, crt_y, crt_x + crt_w, crt_y + crt_h, flash);
-            if let Some(mframe) = self.fx_bank.frames.get(46 + (self.tick / 4) % 2) {
-                mframe.blit_scaled(surface, ox + 185 * scale, oy + 152 * scale, scale);
+            if let Some(anim) = &self.anim {
+                // Authentic CRT radioactive zig-zag interference overlay (R17: 111..=116)
+                let zig_fi = 111 + ((self.tick / 2) % 6);
+                if zig_fi < anim.frames.len() {
+                    anim.draw_stage_frame_f(surface, zig_fi, ox_f, oy_f, sf, false, false);
+                }
             }
-            draw_bitmap_text(
+            draw_bitmap_text_f(
                 surface,
                 &self.font,
                 "CORE MELTDOWN!!",
-                crt_x + 56 * scale,
-                crt_y + 18 * scale,
+                crt_x + sc(56),
+                crt_y + sc(18),
                 Some(0x00FF_FF40),
-                scale,
+                sf,
             );
-            draw_bitmap_text(
+            draw_bitmap_text_f(
                 surface,
                 &self.font,
                 "D'OH!! RESETTING CORE...",
-                crt_x + 36 * scale,
-                crt_y + crt_h - 24 * scale,
+                crt_x + sc(36),
+                crt_y + crt_h - sc(24),
                 Some(0x00FF_FFFF),
-                scale,
+                sf,
             );
         } else {
             fill_rect_px(surface, crt_x, crt_y, crt_x + crt_w, crt_y + crt_h, 0x0004_1608);
             self.draw_crt_question(
                 surface,
                 q,
-                crt_x + 8 * scale,
-                crt_y + 10 * scale,
-                crt_w - 16 * scale,
-                scale,
+                crt_x + sc(8),
+                crt_y + sc(10),
+                crt_w - sc(16),
+                sf,
             );
         }
     }
@@ -290,23 +493,23 @@ impl SimpsonsTriviaModule {
         x: i32,
         mut y: i32,
         max_w: i32,
-        scale: i32,
+        sf: f32,
     ) {
-        let lh = 14 * scale;
+        let lh = (14.0 * sf).round().max(11.0) as i32;
         let header = format!(
             "Q#{:03}   ERRORS: {}/{}",
             (self.order[self.q_cursor % self.order.len()]) + 1,
             self.wrong_count,
             self.meltdown_limit
         );
-        draw_bitmap_text(surface, &self.font, &header, x, y, Some(0x0050_C8FF), scale);
-        y += lh + 4 * scale;
+        draw_bitmap_text_f(surface, &self.font, &header, x, y, Some(0x0050_C8FF), sf);
+        y += lh + (4.0 * sf).round() as i32;
 
-        for line in wrap_bitmap_text(&self.font, &q.question, max_w, scale) {
-            draw_bitmap_text(surface, &self.font, &line, x, y, Some(0x0058_FF78), scale);
+        for line in wrap_bitmap_text_f(&self.font, &q.question, max_w, sf) {
+            draw_bitmap_text_f(surface, &self.font, &line, x, y, Some(0x0058_FF78), sf);
             y += lh;
         }
-        y += 8 * scale;
+        y += (8.0 * sf).round() as i32;
 
         let labels = ["A)", "B)", "C)"];
         for (i, choice) in q.choices.iter().enumerate() {
@@ -331,11 +534,11 @@ impl SimpsonsTriviaModule {
             } else {
                 format!(" {} {}", labels[i], choice)
             };
-            for line in wrap_bitmap_text(&self.font, &prefix, max_w, scale) {
-                draw_bitmap_text(surface, &self.font, &line, x, y, Some(color), scale);
+            for line in wrap_bitmap_text_f(&self.font, &prefix, max_w, sf) {
+                draw_bitmap_text_f(surface, &self.font, &line, x, y, Some(color), sf);
                 y += lh;
             }
-            y += 3 * scale;
+            y += (3.0 * sf).round() as i32;
         }
     }
 }

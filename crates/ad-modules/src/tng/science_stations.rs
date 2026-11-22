@@ -1,16 +1,17 @@
 //! *Science Stations* — 1994 *Star Trek: The Next Generation* After Dark 3.0 Module.
 //!
-//! Enterprise-D Main Bridge aft Science I, Science II, and Isolinear Circuit
-//! Pattern Analysis LCARS consoles (`OFst/OFtb #7000/#8000`, `RLEP #6000/#7000..#7002/#8000/#9000`)
-//! with animated navigational scans, isolinear chips, holographic planets, and
-//! authentic bridge sensor audio!
+//! Full-widescreen responsive Enterprise-D Main Bridge aft Science I, Science II,
+//! and Isolinear Circuit Pattern Analysis LCARS consoles (`OFst/OFtb #7000/#8000`,
+//! `RLEP #6000/#7000..#7002/#8000/#9000`) with complete two-half composite base
+//! frames, fractional high-DPI stage fitting, animated LCARS side telemetry wings,
+//! holographic planets, and authentic bridge sensor chimes.
 
 use ad_sdk::{AdContext, AdControl, AdMetadata, AdModule, AdResult};
 
 use crate::simpsons::{CompoundAnim, RlepBank, draw_bitmap_text, fill_rect_px};
 use super::{
-    FONT_LCARS_14, MOD_SCIENCE, SND_BEEP1, SND_BEEP2, SND_SCIENCES, SND_SENSOR_ALERT, load_anim,
-    load_lcars_font, load_rlep, tng_pack,
+    LCARS_AMBER, LCARS_SKY, LcarsFontSet, MOD_SCIENCE, SND_BEEP1, SND_BEEP2, SND_SCIENCES,
+    SND_SENSOR_ALERT, draw_lcars_wing_telemetry, load_anim, load_rlep, stage_fit, tng_pack,
 };
 
 pub struct ScienceStationsModule {
@@ -18,7 +19,7 @@ pub struct ScienceStationsModule {
     circuit_anim: Option<CompoundAnim>,
     chips_bank: RlepBank,
     planet_bank: RlepBank,
-    font14: RlepBank,
+    fonts: LcarsFontSet,
     station_setting: i32, // 0=Circuits, 1=Science I, 2=Science II, 3=Random
     active_station: i32,
     duration_ticks: usize,
@@ -40,10 +41,7 @@ impl ScienceStationsModule {
                 frames: Vec::new(),
                 palette: Vec::new(),
             },
-            font14: RlepBank {
-                frames: Vec::new(),
-                palette: Vec::new(),
-            },
+            fonts: LcarsFontSet::empty(),
             station_setting: 3,
             active_station: 1,
             duration_ticks: 180,
@@ -103,7 +101,7 @@ impl ScienceStationsModule {
         self.circuit_anim = Some(load_anim(MOD_SCIENCE, 8000));
         self.chips_bank = load_rlep(MOD_SCIENCE, 6000);
         self.planet_bank = load_rlep(MOD_SCIENCE, 9000);
-        self.font14 = load_lcars_font(FONT_LCARS_14);
+        self.fonts.ensure_loaded();
     }
 
     fn render_station(&self, surface: &mut ad_sdk::canvas::AdSurface) {
@@ -111,118 +109,184 @@ impl ScienceStationsModule {
         let h = surface.height;
         fill_rect_px(surface, 0, 0, w, h, 0x0000_0000);
 
-        let s = if w >= 1200 && h >= 900 { 2 } else { 1 };
+        let pad = (h / 48).clamp(6, 18);
         let anim_step = self.tick / self.speed_div.max(1);
+        let hdr_px = (h / 30).clamp(14, 28);
+        let (f_hdr, s_hdr, _) = self.fonts.pick(hdr_px);
 
         match self.active_station {
             0 => {
-                // ISOLINEAR CIRCUIT PATTERN ANALYSIS (#8000 LCARS frame + #6000 glowing chips grid!)
-                let ox = (w - 480 * s) / 2;
-                let oy = (h - 440 * s) / 2;
+                // ISOLINEAR CIRCUIT PATTERN ANALYSIS: OFst #8000 stage=(30,18)..(435,426) [405x408]
+                let (sf, box_x, box_y) = stage_fit(w, h, 420.0, 424.0, pad, pad);
+                let stage_x = box_x - 24.0 * sf;
+                let stage_y = box_y - 12.0 * sf;
+
+                let wing_l = box_x.round() as i32;
+                let wing_r = (box_x + 420.0 * sf).round() as i32;
+                draw_lcars_wing_telemetry(surface, 0, 0, wing_l, h, self.tick, &self.fonts, false);
+                draw_lcars_wing_telemetry(surface, wing_r, 0, w, h, self.tick, &self.fonts, true);
+
                 if let Some(ca) = &self.circuit_anim {
                     if !ca.frames.is_empty() {
-                        ca.draw_stage_frame(surface, 0, ox, oy, s);
+                        ca.draw_stage_frame_f(surface, 0, stage_x, stage_y, sf, false, false);
+                    }
+                    if ca.frames.len() > 1 {
+                        ca.draw_stage_frame_f(surface, 1, stage_x, stage_y, sf, false, false);
                     }
                 }
                 draw_bitmap_text(
                     surface,
-                    &self.font14,
+                    f_hdr,
                     "ISOLINEAR CIRCUIT PATTERN ANALYSIS",
-                    (ox + 108 * s).max(8),
-                    (oy + 22 * s).max(8),
-                    Some(0x00FF_B848),
-                    s,
+                    (stage_x + 96.0 * sf).round() as i32,
+                    (stage_y + 18.0 * sf).round() as i32,
+                    Some(LCARS_AMBER),
+                    s_hdr,
                 );
-                // Grid of pulsing isolinear chips (#6000, 27 frames!)
+
+                // Grid of pulsing isolinear optical chips (#6000, 27 frames) scaled cleanly into console bay!
                 let nchips = self.chips_bank.frames.len();
                 if nchips > 0 {
                     let cols = 5;
                     let rows = 4;
-                    let gx0 = ox + 108 * s;
-                    let gy0 = oy + 126 * s;
+                    let gx0 = stage_x + 114.0 * sf;
+                    let gy0 = stage_y + 132.0 * sf;
                     for r in 0..rows {
                         for c in 0..cols {
                             let ci = (anim_step + r * 5 + c * 3) % nchips;
                             let chip = &self.chips_bank.frames[ci];
-                            let px = gx0 + (c as i32) * 62 * s;
-                            let py = gy0 + (r as i32) * 66 * s;
-                            if px + chip.w * s < w && py + chip.h * s < h {
-                                chip.blit_scaled(surface, px, py, s);
-                            }
+                            let px = (gx0 + (c as f32) * 58.0 * sf).round() as i32;
+                            let py = (gy0 + (r as f32) * 64.0 * sf).round() as i32;
+                            chip.blit_transformed_f(surface, px, py, sf * 0.85, false, false, false, false);
                         }
                     }
                 }
             }
             1 => {
-                // SCIENCE I: LCARS Main Sensor & Navigational Scan (#7000)
-                let ox = (w - 600 * s) / 2;
-                let oy = (h - 450 * s) / 2;
+                // SCIENCE I: Complete two-half LCARS base frame (f[0] upper + f[1] lower)
+                // Stage spans x=45..595 (550px), y=4..459 (455px)
+                let (sf, box_x, box_y) = stage_fit(w, h, 560.0, 464.0, pad, pad);
+                let stage_x = box_x - 40.0 * sf;
+                let stage_y = box_y - 2.0 * sf;
+
+                let wing_l = box_x.round() as i32;
+                let wing_r = (box_x + 560.0 * sf).round() as i32;
+                draw_lcars_wing_telemetry(surface, 0, 0, wing_l, h, self.tick, &self.fonts, false);
+                draw_lcars_wing_telemetry(surface, wing_r, 0, w, h, self.tick, &self.fonts, true);
+
                 if let Some(sa) = &self.sci_anim {
-                    if !sa.frames.is_empty() {
-                        // Base LCARS Science I frame (idx 0)
-                        sa.draw_stage_frame(surface, 0, ox, oy, s);
-                        // Animated middle sensor grid (idx 15..29)
-                        if sa.frames.len() > 29 {
-                            let fi = 15 + (anim_step % 15);
-                            sa.draw_stage_frame(surface, fi, ox, oy, s);
-                        }
-                        // Animated telemetry bar (idx 40..49)
-                        if sa.frames.len() > 49 {
-                            let ti = 40 + (anim_step % 10);
-                            sa.draw_stage_frame(surface, ti, ox, oy, s);
-                        }
+                    if sa.frames.len() > 1 {
+                        // Composite BOTH halves of the Science I LCARS frame!
+                        sa.draw_stage_frame_f(surface, 0, stage_x, stage_y, sf, false, false);
+                        sa.draw_stage_frame_f(surface, 1, stage_x, stage_y, sf, false, false);
+                    }
+                    // Alternate between sub-space sensor sweep (f[15..28]) and tactical waveform (f[2..9])
+                    if sa.frames.len() > 28 {
+                        let scan_fi = if (anim_step / 28) % 2 == 0 {
+                            15 + (anim_step % 14)
+                        } else {
+                            2 + (anim_step % 8)
+                        };
+                        sa.draw_stage_frame_f(surface, scan_fi, stage_x, stage_y, sf, false, false);
+                    }
+                    // Animated LCARS bar telemetry header (f[36..48])
+                    if sa.frames.len() > 48 {
+                        let bar_fi = 36 + (anim_step % 13);
+                        sa.draw_stage_frame_f(surface, bar_fi, stage_x, stage_y, sf, false, false);
                     }
                 }
-                let sub = if (anim_step / 16) % 2 == 0 {
+
+                let sub = if (anim_step / 18) % 2 == 0 {
                     "FWD NAVIGATIONAL SCAN 302"
                 } else {
                     "GALAXY CLASS STARSHIP NCC 1701-D"
                 };
                 draw_bitmap_text(
                     surface,
-                    &self.font14,
+                    f_hdr,
                     sub,
-                    (ox + 120 * s).max(8),
-                    (oy + 12 * s).max(8),
-                    Some(0x00FF_AA44),
-                    s,
+                    (stage_x + 110.0 * sf).round() as i32,
+                    (stage_y + 28.0 * sf).round() as i32,
+                    Some(0x0000_0000),
+                    s_hdr,
                 );
             }
             _ => {
-                // SCIENCE II: Planetary Surface Scan (#7000[30..35] + #9000 holographic planet!)
-                let ox = (w - 580 * s) / 2;
-                let oy = (h - 440 * s) / 2;
+                // SCIENCE II: Complete two-half LCARS base frame (f[29] upper + f[30] lower)
+                // Stage spans x=19..595 (576px), y=4..420 (416px)
+                let (sf, box_x, box_y) = stage_fit(w, h, 580.0, 424.0, pad, pad);
+                let stage_x = box_x - 16.0 * sf;
+                let stage_y = box_y - 2.0 * sf;
+
+                let wing_l = box_x.round() as i32;
+                let wing_r = (box_x + 580.0 * sf).round() as i32;
+                draw_lcars_wing_telemetry(surface, 0, 0, wing_l, h, self.tick, &self.fonts, false);
+                draw_lcars_wing_telemetry(surface, wing_r, 0, w, h, self.tick, &self.fonts, true);
+
                 if let Some(sa) = &self.sci_anim {
-                    if sa.frames.len() > 50 {
-                        sa.draw_stage_frame(surface, 30 + (anim_step % 5), ox, oy, s);
-                        sa.draw_stage_frame(surface, 50 + (anim_step % 2), ox, oy, s);
-                    }
-                }
-                // Holographic planetary globe & orbital telemetry (#9000)
-                if !self.planet_bank.frames.is_empty() {
-                    if let Some(grid) = self.planet_bank.frames.get(4) {
-                        let gx = (w - grid.w * s) / 2;
-                        let gy = (h - grid.h * s) / 2 + 12 * s;
-                        grid.blit_scaled(surface, gx, gy, s);
-                    }
-                    let pi = anim_step % 4.min(self.planet_bank.frames.len());
-                    if let Some(planet) = self.planet_bank.frames.get(pi) {
-                        planet.blit_scaled(
+                    if sa.frames.len() > 33 {
+                        sa.draw_stage_frame_f(surface, 29, stage_x, stage_y, sf, false, false);
+                        sa.draw_stage_frame_f(surface, 30, stage_x, stage_y, sf, false, false);
+                        // Animated right-side sensor readout (f[31..33])
+                        sa.draw_stage_frame_f(
                             surface,
-                            w / 2 - (planet.w * s) / 2,
-                            h / 2 - (planet.h * s) / 2 + 10 * s,
-                            s,
+                            31 + (anim_step % 3),
+                            stage_x,
+                            stage_y,
+                            sf,
+                            false,
+                            false,
                         );
                     }
                 }
+
+                // Holographic planetary orbital grid (#9000[4]) + rotating planet (#9000[0..3]) in left viewport!
+                if !self.planet_bank.frames.is_empty() {
+                    let bay_cx = stage_x + 178.0 * sf;
+                    let bay_cy = stage_y + 245.0 * sf;
+                    if let Some(grid) = self.planet_bank.frames.get(4) {
+                        let gsf = sf * 0.72;
+                        let gw = (grid.w as f32 * gsf).round() as i32;
+                        let gh = (grid.h as f32 * gsf).round() as i32;
+                        grid.blit_rect(
+                            surface,
+                            bay_cx.round() as i32 - gw / 2,
+                            bay_cy.round() as i32 - gh / 2,
+                            gw,
+                            gh,
+                            false,
+                            false,
+                            true,
+                            true,
+                        );
+                    }
+                    let pi = anim_step % 4.min(self.planet_bank.frames.len());
+                    if let Some(planet) = self.planet_bank.frames.get(pi) {
+                        let psf = sf * 1.45;
+                        let pw = (planet.w as f32 * psf).round() as i32;
+                        let ph = (planet.h as f32 * psf).round() as i32;
+                        planet.blit_rect(
+                            surface,
+                            bay_cx.round() as i32 - pw / 2,
+                            bay_cy.round() as i32 - ph / 2,
+                            pw,
+                            ph,
+                            false,
+                            false,
+                            true,
+                            true,
+                        );
+                    }
+                }
+
                 draw_bitmap_text(
                     surface,
-                    &self.font14,
+                    f_hdr,
                     "SCIENCE II // PLANETARY SURFACE SCAN",
-                    (ox + 34 * s).max(8),
-                    (oy + 14 * s).max(8),
-                    Some(0x0078_D0FF),
-                    s,
+                    (stage_x + 74.0 * sf).round() as i32,
+                    (stage_y + 28.0 * sf).round() as i32,
+                    Some(LCARS_SKY),
+                    s_hdr,
                 );
             }
         }

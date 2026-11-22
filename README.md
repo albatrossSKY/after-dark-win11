@@ -1,6 +1,6 @@
-# After Dark v2.0 — Windows 11 Native Rust Port (77 Built-in Screensavers)
+# After Dark v2.5 — Windows 11 Native Rust Port (77 Built-in Screensavers)
 
-A complete **disassembly- & resource-backed native Win64 Rust port** (`windows-sys`) of **Berkeley Systems' After Dark** for Windows 11, uniting **all 77 classic screensaver modules** across four legendary collections into a single standalone executable (`after-dark.exe`):
+A complete **disassembly- & resource-backed native Win64 Rust port** (`windows-sys`) of **Berkeley Systems' After Dark** for Windows 11, uniting **all 77 classic screensaver modules** across four legendary collections into a single standalone executable (`after-dark.exe`) with full **16:9 HD / 4K widescreen scaling** and **pixel-verified 1991–1995 animations**:
 
 - **Classic After Dark 1.0a (1991)** — **37 modules** (all 34 `.AD` modules, both `AD.EXE` built-in savers, and the `ADMODULE.SDK` Blanker sample)
 - **The Simpsons After Dark (1994)** — **15 modules** (2,647 `RLEP` frames, 12,175 `OFst`/`OFtb` compound poses, 87 digitized cast voice clips, 9 polyphonic MIDI songs)
@@ -9,25 +9,31 @@ A complete **disassembly- & resource-backed native Win64 Rust port** (`windows-s
 
 ---
 
-## Visual Galleries
+## Visual Galleries (16:9 HD Contact Sheets)
 
-### Looney Tunes Collection (1995 — All 12 Modules)
+### The Simpsons Collection (1994 — All 15 Modules, 16:9 HD)
+
+| The Simpsons (1–8) | The Simpsons (9–15) |
+| :---: | :---: |
+| ![The Simpsons 1-8](docs/screenshots/simpsons_sheet_1.png) | ![The Simpsons 9-15](docs/screenshots/simpsons_sheet_2.png) |
+
+### Star Trek: The Next Generation Collection (1994 — All 13 Modules, 16:9 HD)
+
+| Star Trek: TNG (1–8) | Star Trek: TNG (9–13) |
+| :---: | :---: |
+| ![Star Trek TNG 1-8](docs/screenshots/tng_sheet_1.png) | ![Star Trek TNG 9-13](docs/screenshots/tng_sheet_2.png) |
+
+### Looney Tunes Collection (1995 — All 12 Modules, 16:9 HD)
 
 | Looney Tunes (1–6) | Looney Tunes (7–12) |
 | :---: | :---: |
 | ![Looney Tunes 1-6](docs/screenshots/looney_sheet_1.png) | ![Looney Tunes 7-12](docs/screenshots/looney_sheet_2.png) |
 
-### The Simpsons Collection (1994 — All 15 Modules)
+### Classic After Dark 1.0a (1991 — 16:9 HD Widescreen Showcase)
 
-| The Simpsons (1–9) | The Simpsons (10–15) |
+| Classic HD Showcase (1–6) | Classic HD Showcase (7–12) |
 | :---: | :---: |
-| ![The Simpsons 1-9](docs/screenshots/simpsons_sheet_1.png) | ![The Simpsons 10-15](docs/screenshots/simpsons_sheet_2.png) |
-
-### Star Trek: The Next Generation Collection (1994 — All 13 Modules)
-
-| Star Trek: TNG (1–9) | Star Trek: TNG (10–13) |
-| :---: | :---: |
-| ![Star Trek TNG 1-9](docs/screenshots/tng_sheet_1.png) | ![Star Trek TNG 10-13](docs/screenshots/tng_sheet_2.png) |
+| ![Classic HD 1-6](docs/screenshots/classic_hd_sheet_1.png) | ![Classic HD 7-12](docs/screenshots/classic_hd_sheet_2.png) |
 
 ### Full 77-Module Catalog Contact Sheets (Alphabetical)
 
@@ -46,6 +52,25 @@ A complete **disassembly- & resource-backed native Win64 Rust port** (`windows-s
 | Modules 61–70 | Modules 71–77 |
 | :---: | :---: |
 | ![Modules 61-70](docs/screenshots/sheet_7.png) | ![Modules 71-77](docs/screenshots/sheet_8.png) |
+
+---
+
+## What's New in Version 2.5
+
+1. **Full 16:9 HD / 4K Widescreen Scaling & HiDPI Rendering Across All 4 Collections**:
+   - Added continuous fractional-scale (`f32`) sprite, bitmap-font, stage-anchored cycle, and transparent mask blitting primitives (`stretch_blt_bitmap_with_brush`, `stretch_blt_surface_with_brush`, `blit_transformed_f`, `draw_stage_frame_f_ex`, `draw_cycle_frame_f`, `draw_bitmap_text_f`, `draw_looney_text_f`, `stage_fit`) so retro 640×480 sprites, fonts, and stages fill modern 1080p, 1440p, and 4K displays crisply without tiny postage-stamp sprites or blocky integer jumps.
+2. **Forensic Animation & Sprite Overhaul Across All 15 *The Simpsons* Modules**:
+   - **Simpsons Clocks**: Rebuilt all 3 animated wall clocks from exact pixel-measured geometry — **Duff Brewery Cuckoo Clock** (centered dial hands, recessed dark brick archways with Barney & Lenny behind hinged 3-stage double doors, Homer reclining-chair slide-out on alternate chimes, flickering purple `"Duff"` neon + sparks, forward-facing 7-frame scurrying rat), **Krusty Pop-Eye Clock** (forehead watch dial hands, roving eyeballs & pupils synced to the swinging pendulum pink tongue, chime-only starburst explosion + hair sparks + spring-popping eyeballs seated inside the eye sockets), and **Maggie Clock** (template-matched blinking eyes & pacifier + toddling/tripping Maggie underneath).
+   - **Krusty**: Replaced sequential raw-frame dumping with 12 curated multi-layer theater routines compositing floor/wall spotlights, synchronized legs/unicycle frames, juggling, shadow puppets, pie-in-face/bandaged stars, and tomato heckling weighted by the `Success:` slider, centered cleanly on the spotlight while filtering Director offstage solid-black matte masks.
+   - **Grass Skirts**: Stage-anchored Homer & Ned lawn-mowing walk cycles (zero foot slipping), clean wooden picket fence border against sky, mowed grass stripes aligned directly beneath the mower decks, jam-causing yard obstacles (Krusty doll, plutonium rod), authentic stuck/wave reactions, and toddling Maggie cameo.
+   - **Homer Eats & Objets B'art**: Corrected Homer's chomp/walk/goodie/choke ranges (with full **Marge** chocolate-syrup/sugar/knife cameo) and Bart/Skinner native left-facing sprite flipping & spray/scold ranges (with **Milhouse** and **Nelson "HA-HA!"** cameos).
+   - **Lisa's Mood Swings, Simpsons Trivia, Grampa's Wisdom, Simpsons Physics, Itchy & Scratchy, Mr. Burns & Snowball I**: Fixed Lisa's sax cycle to composite full-body poses over her floor spotlight; restricted *Trivia*'s shattering Krusty gauge, sparking switches, strobe, and CRT zig-zag interference strictly to `Meltdown` while adding widescreen Sector 7-G flanking instrumentation panels and removing an overlapping duplicate wall poster; mapped Grampa's exact talk/stand/recline/dream-cloud runs; replaced *Physics* character splitting with an exact 19-character alphabetical frame-slice table; stabilized skit cameras in *Itchy & Scratchy* and *Mr. Burns*; and smoothed *Snowball I*'s angel wing animation to ping-pong.
+3. **Star Trek: TNG Widescreen LCARS UI Toolkit & Holodeck Upgrade**:
+   - Built a dedicated widescreen **LCARS** layout engine (`crates/ad-modules/src/tng/mod.rs`) with authentic rounded elbows, telemetry panels, and high-DPI typography across *Counselor Troi*, *Officer's Review*, *Personnel Files*, *Science Stations*, *Encounters*, and *Starfleet Messages*, plus full-frame 16:9 HD scaling for *Data Dances*, *Starbase*, *The Borg*, *Nanites*, *Tachyon*, *Warp Effect*, and *Worf's Weapons*.
+4. **Looney Tunes 16:9 HD Widescreen Stages & Fractional Typography**:
+   - Upgraded all 12 Looney Tunes modules with widescreen theater stages, curtains, tiled ACME backdrops, and fractional-scale Looney bitmap text (*ACME Home Shopping*, *Cartoons 101*, *Conducktor*, *Desquetoppe D'Amour*, *Looney Messages*, *Marvin's Invasion*, *Michigan J. Frog*, *Putty Tat Splat!*, *Rabbitron*, *Taz Desktop*, *Wockets' Wed Gware*, *Yosemite Sam*).
+5. **Classic After Dark 1.0a (1991) HiDPI & 16:9 HD Scaling**:
+   - Upgraded classic bitmap and vector modules (*Flying Toasters*, *Aquatic Realm*, *Clocks*, *Nocturnes*, *Globe*, *Logo*, *Slide Show*, *Starry Night*, *GraphStat*, *Messages*, *Spotlight*, *Can of Worms*, *Punch Out*, *Rain Storm*, *Warp!*) to scale sprites, radii, stroke widths, and typography cleanly to native HD/4K resolutions, validated by two new 16:9 HD contact sheets (`classic_hd_sheet_1.png` & `classic_hd_sheet_2.png`).
 
 ---
 
@@ -128,21 +153,21 @@ A complete **disassembly- & resource-backed native Win64 Rust port** (`windows-s
 
 | Module | ID | Highlights |
 |---|---|---|
-| **Bart's Chalkboard** | `simpsons_chalkboard` | Bart writes all 30 authentic episode chalkboard gags (`CSTR #1300`) in bitmap handwriting font (`RLEP #1500`) before skateboarding off |
-| **Files of Springfield** | `simpsons_files` | Springfield Elementary personnel folder cabinet with animated character tabs, mugshots, and biographies |
-| **Grampa's Tales** | `simpsons_grampa` | Abe Simpson rambles through meandering stories (`HSTR`) in the Retirement Castle with 21 digitized voice clips & snores |
-| **Grass Skirts** | `simpsons_grass_skirts` | Hula-dancing Homer, Marge, Bart, Lisa, and Maggie parade across the Windows desktop to polyphonic Hawaiian MIDI themes |
-| **Homer Eats** | `simpsons_homer_eats` | Giant Homer chomps actual bite holes out of your live Windows desktop (`RLEP #12000`) while shouting *"Mmm... donuts!"* and *"D'oh!"* |
-| **How To Draw Bart** | `simpsons_how_to_draw` | Step-by-step animator's pencil & ink construction of Bart Simpson on an artist's drawing board |
-| **Itchy & Scratchy** | `simpsons_itchy_scratchy` | Cartoon chase and mallet mayhem across the live Windows desktop with the *Itchy & Scratchy* MIDI theme song |
-| **Krusty the Clown** | `simpsons_krusty` | Krusty juggling, laughing (`"Hey hey, kids!"`), and getting pied in his television studio |
-| **Lisa's Moods** | `simpsons_lisa_moods` | Lisa improvises Happy & Angry saxophone solos (`LISA` choreographed notes + MIDI sax scores) |
-| **Mr. Burns** | `simpsons_mr_burns` | Montgomery Burns and Smithers monitor the Nuclear Power Plant security cameras (`"Excellent..."`) |
-| **Objets d'Bart** | `simpsons_objets_bart` | Bart sprays graffiti tags, slingshots, and skateboards directly onto your captured Windows desktop |
-| **Physics With Frink** | `simpsons_physics` | Professor Frink's chalkboard physics demonstrations (`"Glayvin!"`) with animated mechanical contraptions |
-| **Simpsons Clocks** | `simpsons_clocks` | Live functional wall clocks (`SCLO`) featuring Homer, Bart, Krusty, and Maggie with animated eyes and pendulums |
-| **Snowball II** | `simpsons_snowball` | Snowball II stalks, pounces, and scratches claw marks across the live Windows desktop |
-| **Springfield Trivia** | `simpsons_trivia` | Interactive multi-category *Simpsons* trivia quiz (`QERY`) with scoreboard and cast reactions |
+| **Chalkboard** | `simpsons_chalkboard` | Bart writes authentic episode chalkboard gags (`CSTR #1300`) in bitmap handwriting font (`RLEP #1500`) with chalk dust & eraser |
+| **Simpsons Files** | `simpsons_files` | Springfield File cabinet with animated character folders, classic episode lists, and character illustrations |
+| **Grampa's Wisdom** | `simpsons_grampa` | Abe Simpson rambles from his purple armchair (`HSTR`)—standing up, sitting back down, reclining, drooling, and snoozing on a dream cloud with 21 digitized voice clips |
+| **Grass Skirts** | `simpsons_grass_skirts` | Homer & Ned Flanders mow striped lawns in their finest dresses/muumuus, dodging weeds, Krusty dolls & plutonium rods while Maggie toddles by |
+| **Homer Eats** | `simpsons_homer_eats` | Homer chomps bite holes out of your live Windows desktop or an `"AH FUDGE!"` chocolate bar while Marge stops by with chocolate syrup, sugar & sighs |
+| **How to Draw** | `simpsons_how_to_draw` | David Silverman's step-by-step animator's pencil & ink construction of Bart Simpson on a graph-paper drawing board |
+| **Itchy & Scratchy** | `simpsons_itchy_scratchy` | Classic multi-frame cartoon chase and mayhem skits directly on your live Windows desktop with the *Itchy & Scratchy* MIDI theme |
+| **Krusty** | `simpsons_krusty` | Multi-layer theater spotlight routines: juggling dolls/pins/pies/balls, unicycle, shadow puppets, smoking/coughing, pie-in-face & heckling tomatoes (`"Hey hey, kids!"`) |
+| **Lisa's Mood Swings** | `simpsons_lisa_moods` | Full-body spotlighted Lisa improvises Happy, Sad, and Angry saxophone solos surrounded by choreographed golden musical-note silhouettes (`LISA`) |
+| **Mr. Burns** | `simpsons_mr_burns` | Montgomery Burns and Smithers emerge from hidden office vaults & security monitor banks across your desktop (`"Excellent..."`) |
+| **Objets B'art** | `simpsons_objets_bart` | Bart sprays graffiti tags onto your live Windows desktop and sprints away from Principal Skinner, with Milhouse and Nelson (`"HA-HA!"`) cameos |
+| **Simpsons Physics** | `simpsons_physics` | 19 Springfield character heads (Barney through Smithers) bouncing and colliding under configurable gravity & attraction with animated head-turns and reactions |
+| **Simpsons Clocks** | `simpsons_clocks` | 3 live animated wall clocks: **Duff Brewery** (Barney, Lenny, swinging doors, Homer recliner, neon & rat), **Krusty Pop-Eye** (forehead dial, roving/popping eyes, pendulum tongue & chime explosion), and **Maggie** (blinking eyes, pacifier & toddling Maggie) |
+| **Snowball I** | `simpsons_snowball` | Angel Snowball I flaps smoothly on ping-pong wings over clouds and a starry night sky |
+| **Simpsons Trivia** | `simpsons_trivia` | Sector 7-G **E-Fission-Cy 1000** Core Temperature Regulator hosting 300 authentic `QERY` trivia questions with live gauges, ceiling ooze, spider cameo, and reactor meltdown |
 
 ### Collection 3: Star Trek: The Next Generation After Dark (1994 — 13 Modules)
 
@@ -199,7 +224,7 @@ cargo build --workspace --release
 .\target\release\after-dark.exe
 ```
 
-`cargo test --workspace` executes automated rendering, audio/resource integrity, and pixel-variance checks across all **77 built-in modules** plus `AD_PREFS.INI`, `RANDOM.ADS`, `MESSAGES.ADS`, `GRAFSTAT.TXT`, and the external Win64 SDK `.dll` plugin, and exports all 14 visual contact sheets to `target/verify_snapshots/`.
+`cargo test --workspace` executes automated rendering, audio/resource integrity, and pixel-variance checks across all **77 built-in modules** plus `AD_PREFS.INI`, `RANDOM.ADS`, `MESSAGES.ADS`, `GRAFSTAT.TXT`, and the external Win64 SDK `.dll` plugin, and exports all 16 visual contact sheets (8 catalog sheets + 8 16:9 HD collection sheets) to `target/verify_snapshots/`.
 
 Optional CLI flags:
 - `--sleep` — Immediately engage fullscreen screensaver.

@@ -195,10 +195,33 @@ impl SlideShowModule {
                 SlideSource::Embedded(i) => AdBitmap::from_bmp_bytes(DEFAULT_SLIDES[*i]),
             };
             if let Some(bmp) = bmp {
-                if let Some(mut surf) = AdSurface::new(bmp.width, bmp.height) {
-                    surf.bit_blt_bitmap(0, 0, bmp.width, bmp.height, &bmp, 0, 0, ROP_SRCCOPY);
-                    self.slide_w = bmp.width;
-                    self.slide_h = bmp.height;
+                // Fit slide proportionally to ~82% of the modern widescreen HD/4K viewport (aspect-preserving!)
+                let max_w = ((ctx.module.rgn_width * 84) / 100).max(32);
+                let max_h = ((ctx.module.rgn_height * 84) / 100).max(32);
+                let sx = max_w as f32 / bmp.width.max(1) as f32;
+                let sy = max_h as f32 / bmp.height.max(1) as f32;
+                let fit_scale = sx.min(sy).clamp(0.25, 6.0);
+                let dst_w = ((bmp.width as f32 * fit_scale).round() as i32).max(1);
+                let dst_h = ((bmp.height as f32 * fit_scale).round() as i32).max(1);
+                if let Some(mut surf) = AdSurface::new(dst_w, dst_h) {
+                    if dst_w == bmp.width && dst_h == bmp.height {
+                        surf.bit_blt_bitmap(0, 0, bmp.width, bmp.height, &bmp, 0, 0, ROP_SRCCOPY);
+                    } else {
+                        surf.stretch_blt_bitmap(
+                            0,
+                            0,
+                            dst_w,
+                            dst_h,
+                            &bmp,
+                            0,
+                            0,
+                            bmp.width,
+                            bmp.height,
+                            ROP_SRCCOPY,
+                        );
+                    }
+                    self.slide_w = dst_w;
+                    self.slide_h = dst_h;
                     // Exact centering formula (`1:105D..1:107C`): (bmp_size - rgn_size) / 2
                     self.off_x = (self.slide_w - ctx.module.rgn_width) / 2;
                     self.off_y = (self.slide_h - ctx.module.rgn_height) / 2;

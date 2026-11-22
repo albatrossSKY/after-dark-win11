@@ -1,19 +1,18 @@
 //! "Looney Messages" — Classic 1995 *Looney Tunes* After Dark 3.0 module.
 //!
-//! Elmer Fudd, Foghorn Leghorn (who interjects *", I SAY, SON"* from `STR# #11160`),
-//! or Speedy Gonzales (`OFst #11000`, 331 compound frames across `RLEP #11000..#11001`)
-//! delivers your message (`STR# #11150..#11155` or custom text) in bold cartoon
-//! display typography (`RLEP #11200` 42px and `RLEP #11500` 23px) with digitized
-//! cast voices (`MSG_ELMER_VOICES`, `MSG_FOGHORN_VOICES`, `MSG_SPEEDY_VOICES`).
+//! Full-widescreen theater banner delivered by Elmer Fudd, Foghorn Leghorn
+//! (who interjects *", I SAY, SON!"*), or Speedy Gonzales (`OFst #11000`)
+//! with smoothly scaled cartoon display typography (`RLEP #11200`/`#11500`)
+//! and digitized cast voices.
 
 use ad_sdk::{AdContext, AdControl, AdMetadata, AdModule, AdResult};
 
 use crate::looney::{
-    MOD_MESSAGES, MSG_ELMER_VOICES, MSG_FOGHORN_VOICES, MSG_SPEEDY_VOICES, draw_looney_text,
-    fill_box_px, load_anim, load_rlep, looney_pack, measure_looney_text, outline_box_px,
-    wrap_looney_text,
+    MOD_MESSAGES, MSG_ELMER_VOICES, MSG_FOGHORN_VOICES, MSG_SPEEDY_VOICES, advance_filtered_range,
+    draw_looney_text_f, fill_box_px, load_anim, load_rlep, looney_pack, measure_looney_text_f,
+    outline_box_px, wrap_looney_text_f,
 };
-use crate::simpsons::{CompoundAnim, RlepBank};
+use crate::simpsons::{CompoundAnim, RlepBank, draw_line_px};
 
 const PRESET_MESSAGES: &[&str] = &[
     "Out to lunch.",
@@ -153,7 +152,7 @@ impl AdModule for LooneyMessagesModule {
         self.type_idx = ctx.module.raw_control_value[0].clamp(0, 4);
         self.msg_idx = ctx.module.raw_control_value[1].clamp(0, 5);
         self.tick = 0;
-        self.actor_x = (ctx.surface.width.max(320) / 2) as f32;
+        self.actor_x = (ctx.surface.width.max(320) / 3) as f32;
         self.pick_actor(ctx);
         ctx.surface.pixels_mut().fill(0x0010_1424);
         AdResult::NoError
@@ -170,7 +169,13 @@ impl AdModule for LooneyMessagesModule {
 
         let w = ctx.surface.width;
         let h = ctx.surface.height;
+        let sf = (h as f32 / 480.0).clamp(1.0, 3.6);
         ctx.surface.pixels_mut().fill(0x0010_1424);
+
+        // Warm theater floor along the bottom of the widescreen stage
+        let floor_y = (h * 84) / 100;
+        fill_box_px(ctx.surface, 0, floor_y, w, h - floor_y, 0x0022_1816);
+        draw_line_px(ctx.surface, 0, floor_y, w - 1, floor_y, 0x0068_4836, (2.0 * sf).round().max(2.0) as i32);
 
         let (Some(font_big), Some(font_med), Some(anim)) =
             (&self.font_big, &self.font_med, &self.anim)
@@ -178,52 +183,51 @@ impl AdModule for LooneyMessagesModule {
             return AdResult::NoError;
         };
 
-        let sign_w = (w - 80).min(540);
+        // Full-widescreen scaled parchment message signboard
+        let pad_x = (w / 12).clamp(24, 120);
+        let sign_w = (w - pad_x * 2).max(240);
         let sign_x = (w - sign_w) / 2;
-        let sign_y = 34;
-        let sign_h = 132;
+        let sign_y = (h / 14).clamp(18, 60);
+        let sign_h = (h * 30 / 100).clamp(100, 320);
+        let b1 = (4.0 * sf).round().max(3.0) as i32;
+        let b2 = (2.0 * sf).round().max(2.0) as i32;
+        let inset = (8.0 * sf).round() as i32;
         fill_box_px(ctx.surface, sign_x, sign_y, sign_w, sign_h, 0x00F6_E8C0);
-        outline_box_px(ctx.surface, sign_x, sign_y, sign_w, sign_h, 0x00C8_3820, 4);
+        outline_box_px(ctx.surface, sign_x, sign_y, sign_w, sign_h, 0x00C8_3820, b1);
         outline_box_px(
             ctx.surface,
-            sign_x + 6,
-            sign_y + 6,
-            sign_w - 12,
-            sign_h - 12,
+            sign_x + inset,
+            sign_y + inset,
+            sign_w - inset * 2,
+            sign_h - inset * 2,
             0x00E8_A020,
-            2,
+            b2,
         );
 
         let msg_upper = self.current_message();
-        let big_w = measure_looney_text(font_big, &msg_upper, 1);
-        if big_w <= sign_w - 32 {
+        let txt_sf = (sf * 1.25).clamp(1.0, 3.8);
+        let big_w = measure_looney_text_f(font_big, &msg_upper, txt_sf);
+        if big_w <= sign_w - inset * 4 {
             let tx = sign_x + (sign_w - big_w) / 2;
-            let ty = sign_y + (sign_h - 42) / 2;
-            draw_looney_text(ctx.surface, font_big, &msg_upper, tx, ty, None, 1);
+            let ty = sign_y + (sign_h - (42.0 * txt_sf).round() as i32) / 2;
+            draw_looney_text_f(ctx.surface, font_big, &msg_upper, tx, ty, None, txt_sf);
         } else {
-            let lines = wrap_looney_text(font_med, &msg_upper, sign_w - 32, 1);
-            let total_h = (lines.len() as i32) * 28;
-            let mut ty = sign_y + ((sign_h - total_h) / 2).max(14);
+            let med_sf = (sf * 1.2).clamp(1.0, 3.6);
+            let lines = wrap_looney_text_f(font_med, &msg_upper, sign_w - inset * 4, med_sf);
+            let line_h = (28.0 * med_sf).round() as i32;
+            let total_h = (lines.len() as i32) * line_h;
+            let mut ty = sign_y + ((sign_h - total_h) / 2).max(inset * 2);
             for line in lines.iter().take(4) {
-                let lw = measure_looney_text(font_med, line, 1);
-                let tx = sign_x + ((sign_w - lw) / 2).max(10);
-                draw_looney_text(ctx.surface, font_med, line, tx, ty, None, 1);
-                ty += 28;
+                let lw = measure_looney_text_f(font_med, line, med_sf);
+                let tx = sign_x + ((sign_w - lw) / 2).max(inset);
+                draw_looney_text_f(ctx.surface, font_med, line, tx, ty, None, med_sf);
+                ty += line_h;
             }
         }
 
         let (start, end) = Self::frame_range_for_actor(self.active_actor);
         let end = end.min(anim.frames.len().saturating_sub(1));
-        let next = crate::looney::advance_filtered_range(
-            anim,
-            self.frame_idx,
-            start,
-            end,
-            45,
-            45,
-            240,
-            240,
-        );
+        let next = advance_filtered_range(anim, self.frame_idx, start, end, 45, 45, 240, 240);
         if next <= self.frame_idx && self.tick % 90 == 0 {
             self.pick_actor(ctx);
         } else {
@@ -231,36 +235,53 @@ impl AdModule for LooneyMessagesModule {
         }
 
         if self.active_actor >= 2 {
-            let spd = if self.active_actor == 3 { 9.0 } else { 5.0 };
+            let spd = (if self.active_actor == 3 { 9.0 } else { 5.0 }) * sf;
             self.actor_x += spd;
-            if self.actor_x > (w - 80) as f32 {
-                self.actor_x = 80.0;
+            let margin = 90.0 * sf;
+            if self.actor_x > w as f32 - margin {
+                self.actor_x = margin;
             }
         } else {
-            self.actor_x = (w / 2 - 40) as f32;
+            self.actor_x = (w as f32) * 0.36;
         }
 
         let Some(anim) = &self.anim else {
             return AdResult::NoError;
         };
-        anim.draw_anchored_bottom(
+        let char_sf = ((h as f32 * 0.38) / 115.0).clamp(1.1, 4.2);
+        let ground_y = floor_y + (16.0 * sf).round() as i32;
+        anim.draw_anchored_bottom_f(
             ctx.surface,
             self.frame_idx,
             self.actor_x as i32,
-            h - 42,
-            1,
+            ground_y,
+            char_sf,
+            false,
+            true,
             false,
         );
-        // Also draw Foghorn Leghorn or Elmer Fudd on the right side when Speedy is active (or vice versa)
         let raw_buddy = if self.active_actor >= 2 {
             17 + ((self.tick as usize) % 40)
         } else {
             180 + ((self.tick as usize) % 45)
         };
-        let buddy_frame =
-            crate::looney::advance_filtered_range(anim, raw_buddy, 0, 268, 45, 50, 240, 240);
-        anim.draw_anchored_bottom(ctx.surface, buddy_frame, w / 2 + 125, h - 42, 1, false);
+        let buddy_frame = advance_filtered_range(anim, raw_buddy, 0, 268, 45, 50, 240, 240);
+        anim.draw_anchored_bottom_f(
+            ctx.surface,
+            buddy_frame,
+            (w * 66) / 100,
+            ground_y,
+            char_sf,
+            false,
+            true,
+            false,
+        );
 
+        AdResult::NoError
+    }
+
+    fn do_close(&mut self, ctx: &mut AdContext<'_>) -> AdResult {
+        ctx.sound.stop_all();
         AdResult::NoError
     }
 }

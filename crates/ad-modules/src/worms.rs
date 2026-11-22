@@ -85,6 +85,7 @@ pub struct WormsModule {
     worms: [Worm; 20],
     prev_head: [usize; 20],
     worm_sheet: Option<AdSurface>,
+    scale: i32,
     sound_ascending: bool,
     next_sound_ms: u64,
 }
@@ -99,6 +100,7 @@ impl WormsModule {
             worms: [Worm::default(); 20],
             prev_head: [0; 20],
             worm_sheet: None,
+            scale: 1,
             sound_ascending: false,
             next_sound_ms: 0,
         }
@@ -224,11 +226,13 @@ impl AdModule for WormsModule {
         self.wiggle = Self::map_wiggle(ctx.module.control_value[0]);
         let w = ctx.module.rgn_width.max(16);
         let h = ctx.module.rgn_height.max(16);
+        let s = (h / 480).clamp(1, 4);
+        self.scale = s;
         self.bounds = SegRect {
-            left: -5,
-            top: -5,
-            right: w + 5,
-            bottom: h + 5,
+            left: -5 * s,
+            top: -5 * s,
+            right: w + 5 * s,
+            bottom: h + 5 * s,
         };
 
         // All 20 worms burst out of ONE shared random starting point ("Can of Worms"!)
@@ -236,12 +240,12 @@ impl AdModule for WormsModule {
         let start_y = ctx.rng.rand_mod(h);
 
         for worm in &mut self.worms {
-            for s in 0..21 {
-                worm.segs[s] = SegRect {
+            for idx in 0..21 {
+                worm.segs[idx] = SegRect {
                     left: 0,
                     top: 0,
-                    right: 4,
-                    bottom: 4,
+                    right: 4 * s,
+                    bottom: 4 * s,
                 };
             }
             worm.segs[0].offset(start_x, start_y);
@@ -268,6 +272,7 @@ impl AdModule for WormsModule {
         self.wiggle = Self::map_wiggle(ctx.module.control_value[0]);
         let num_segs = (ctx.module.control_value[1] as usize).clamp(2, 20);
         let num_worms = (ctx.module.control_value[2] as usize).clamp(1, 20);
+        let s = self.scale.max(1);
 
         self.maybe_play_sound(ctx);
 
@@ -284,8 +289,31 @@ impl AdModule for WormsModule {
             // 1. Erase oldest tail segment -> eats screen to black via Panel 0 (SRCAND)
             let tail_rc = self.worms[w].segs[head];
             if !tail_rc.is_empty() {
-                ctx.surface
-                    .bit_blt_surface(tail_rc.left, tail_rc.top, 4, 4, sheet, 0, 0, ROP_SRCAND);
+                if s == 1 {
+                    ctx.surface.bit_blt_surface(
+                        tail_rc.left,
+                        tail_rc.top,
+                        4,
+                        4,
+                        sheet,
+                        0,
+                        0,
+                        ROP_SRCAND,
+                    );
+                } else {
+                    ctx.surface.stretch_blt_surface(
+                        tail_rc.left,
+                        tail_rc.top,
+                        4 * s,
+                        4 * s,
+                        sheet,
+                        0,
+                        0,
+                        4,
+                        4,
+                        ROP_SRCAND,
+                    );
+                }
             }
 
             // 2. Random wiggle turn (+/- wiggle)
@@ -298,8 +326,8 @@ impl AdModule for WormsModule {
             // 3. Exact Win16 GetDirectionDelta quirk: signed `dir % 24` checked as unsigned `<= 23`
             let dir_rem = self.worms[w].dir % 24;
             if (0..=23).contains(&dir_rem) {
-                self.delta_x = DIR_DX[dir_rem as usize];
-                self.delta_y = DIR_DY[dir_rem as usize];
+                self.delta_x = DIR_DX[dir_rem as usize] * s;
+                self.delta_y = DIR_DY[dir_rem as usize] * s;
             }
 
             // 4. Advance head segment
@@ -318,33 +346,61 @@ impl AdModule for WormsModule {
                 }
             }
 
-            // 6. Draw new head: 6x6 black outer halo (SRCAND) + 4x4 colored hollow ring (DSPDxax)
-            ctx.surface.bit_blt_surface(
-                draw_rc.left - 1,
-                draw_rc.top - 1,
-                6,
-                6,
-                sheet,
-                8,
-                0,
-                ROP_SRCAND,
-            );
+            // 6. Draw new head: scaled black outer halo (SRCAND) + colored hollow ring (DSPDxax)
             let brush_color = if ctx.system.bits_per_pixel == 1 {
                 rgb(255, 255, 255)
             } else {
                 self.worms[w].color
             };
-            ctx.surface.bit_blt_surface_with_brush(
-                draw_rc.left,
-                draw_rc.top,
-                4,
-                4,
-                sheet,
-                4,
-                0,
-                brush_color,
-                ROP_DSPDXAX,
-            );
+            if s == 1 {
+                ctx.surface.bit_blt_surface(
+                    draw_rc.left - 1,
+                    draw_rc.top - 1,
+                    6,
+                    6,
+                    sheet,
+                    8,
+                    0,
+                    ROP_SRCAND,
+                );
+                ctx.surface.bit_blt_surface_with_brush(
+                    draw_rc.left,
+                    draw_rc.top,
+                    4,
+                    4,
+                    sheet,
+                    4,
+                    0,
+                    brush_color,
+                    ROP_DSPDXAX,
+                );
+            } else {
+                ctx.surface.stretch_blt_surface(
+                    draw_rc.left - s,
+                    draw_rc.top - s,
+                    6 * s,
+                    6 * s,
+                    sheet,
+                    8,
+                    0,
+                    6,
+                    6,
+                    ROP_SRCAND,
+                );
+                ctx.surface.stretch_blt_surface_with_brush(
+                    draw_rc.left,
+                    draw_rc.top,
+                    4 * s,
+                    4 * s,
+                    sheet,
+                    4,
+                    0,
+                    4,
+                    4,
+                    brush_color,
+                    ROP_DSPDXAX,
+                );
+            }
         }
 
         AdResult::NoError

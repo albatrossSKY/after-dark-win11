@@ -91,21 +91,24 @@ impl AdModule for SpotlightModule {
     }
 
     fn do_initialize(&mut self, ctx: &mut AdContext<'_>) -> AdResult {
-        // 1:0012..1:0198
-        self.spot_h = ctx.module.control_value[0].clamp(10, 140);
-        self.speed = ctx.module.control_value[1].clamp(1, 7);
+        // 1:0012..1:0198, proportionally scaled for modern HD/4K displays
+        let sf = (ctx.module.rgn_height as f32 / 480.0).clamp(1.0, 4.0);
+        let base_h = ctx.module.control_value[0].clamp(10, 140);
+        self.spot_h = ((base_h as f32 * sf).round() as i32)
+            .min((ctx.module.rgn_height - BORDER_PAD * 2 - 4).max(12));
+        self.speed = ((ctx.module.control_value[1].clamp(1, 7) as f32 * sf).round() as i32).max(1);
 
         let aspect_x = (ctx.system.aspect_x.max(1)) as u32;
         let aspect_y = (ctx.system.aspect_y.max(1)) as u32;
         self.spot_w = (((self.spot_h as u32) * aspect_y) / aspect_x).max(1) as i32;
 
-        self.buf_h = self.spot_h + BORDER_PAD * 2;
-        self.buf_w = self.spot_w + BORDER_PAD * 2;
+        let pad = (BORDER_PAD as f32 * sf).round().max(BORDER_PAD as f32) as i32;
+        self.buf_h = self.spot_h + pad * 2;
+        self.buf_w = self.spot_w + pad * 2;
 
         if self.capture_desktop || self.desktop.is_none() {
-            let max_x = (ctx.module.rgn_width - self.spot_w - self.speed).max(1);
-            // Exact original quirk: subtracts spot_w on Y as well
-            let max_y = (ctx.module.rgn_height - self.spot_w - self.speed).max(1);
+            let max_x = (ctx.module.rgn_width - self.buf_w).max(1);
+            let max_y = (ctx.module.rgn_height - self.buf_h).max(1);
             self.pos_x = ctx.rng.rand() % max_x;
             self.pos_y = ctx.rng.rand() % max_y;
             self.dir_x = true;
@@ -121,10 +124,10 @@ impl AdModule for SpotlightModule {
 
         self.spot_buf = AdSurface::new(self.buf_w, self.buf_h);
         self.spot_rgn = Some(AdRegion::elliptic(
-            BORDER_PAD,
-            BORDER_PAD,
-            BORDER_PAD + self.spot_w,
-            BORDER_PAD + self.spot_h,
+            pad,
+            pad,
+            pad + self.spot_w,
+            pad + self.spot_h,
         ));
         self.capture_desktop = true;
 
@@ -143,7 +146,10 @@ impl AdModule for SpotlightModule {
 
     fn do_draw_frame(&mut self, ctx: &mut AdContext<'_>) -> AdResult {
         // 1:01DF..1:02F8
-        self.speed = ctx.module.control_value[1].clamp(1, 7);
+        let sf = (ctx.module.rgn_height as f32 / 480.0).clamp(1.0, 4.0);
+        let pad = (BORDER_PAD as f32 * sf).round().max(BORDER_PAD as f32) as i32;
+        self.speed = ((ctx.module.control_value[1].clamp(1, 7) as f32 * sf).round() as i32)
+            .clamp(1, (pad - 1).max(1));
 
         let (Some(desktop), Some(spot_buf), Some(spot_rgn)) = (
             self.desktop.as_ref(),
@@ -153,20 +159,20 @@ impl AdModule for SpotlightModule {
             return AdResult::NoError;
         };
 
-        // 1. Fill scratch buffer black (outer 10px margin stays permanently black)
+        // 1. Fill scratch buffer black (outer padded margin stays permanently black)
         spot_buf.set_clip_region(None);
         spot_buf.fill_black();
 
         // 2. Clip to ellipse & copy live desktop patch
         spot_buf.set_clip_region(Some(spot_rgn));
         spot_buf.bit_blt_surface(
-            BORDER_PAD,
-            BORDER_PAD,
+            pad,
+            pad,
             self.spot_w,
             self.spot_h,
             desktop,
-            self.pos_x + BORDER_PAD,
-            self.pos_y + BORDER_PAD,
+            self.pos_x + pad,
+            self.pos_y + pad,
             ROP_SRCCOPY,
         );
         spot_buf.set_clip_region(None);

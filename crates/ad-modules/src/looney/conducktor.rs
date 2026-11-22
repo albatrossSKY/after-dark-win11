@@ -1,18 +1,18 @@
 //! "Conducktor" — Classic 1995 *Looney Tunes* After Dark 3.0 module.
 //!
-//! Maestro Daffy Duck conducts Verdi's *Anvil Chorus* (`#70`) or Tchaikovsky's
-//! *1812 Overture* (`#80`) (`OFst #2000`, 891 compound frames across `RLEP #2000..#2002`)
-//! while colorful musical notes (`MENU #1000`) float across the screen—until a
-//! literal anvil, safe, or cannonball drops on his head (`DAFFY_VOICES`).
+//! Full-widescreen concert hall where Maestro Daffy Duck conducts Verdi's
+//! *Anvil Chorus* (`#70`) or Tchaikovsky's *1812 Overture* (`#80`) (`OFst #2000`)
+//! under a soft golden theater spotlight framed by red velvet stage curtains,
+//! with proportionally scaled colorful musical notes (`MENU #1000`) and
+//! digitized Daffy Duck voice clips (`DAFFY_VOICES`).
 
 use ad_sdk::{AdContext, AdControl, AdMetadata, AdModule, AdResult};
 
 use crate::looney::{
-    DAFFY_VOICES, MOD_CONDUCKTOR, SONG_1812_OVERTURE, SONG_ANVIL_CHORUS, load_anim, looney_pack,
+    DAFFY_VOICES, MOD_CONDUCKTOR, SONG_1812_OVERTURE, SONG_ANVIL_CHORUS, advance_filtered_range,
+    fill_box_px, load_anim, looney_pack,
 };
-use crate::simpsons::{
-    CompoundAnim, draw_line_px, fill_circle_px, music_loops_from_slider,
-};
+use crate::simpsons::{CompoundAnim, draw_line_px, music_loops_from_slider};
 
 struct FloatingNote {
     x: f32,
@@ -38,7 +38,7 @@ impl ConducktorModule {
         Self {
             color_idx: 6,
             symphony_idx: 2,
-            music_raw: 16,
+            music_raw: 25,
             anim: None,
             frame_idx: 0,
             tick: 0,
@@ -78,7 +78,7 @@ impl ConducktorModule {
                 },
                 AdControl::LabeledSlider {
                     title: "Music:".to_string(),
-                    default_raw: 16,
+                    default_raw: 25,
                     labels: vec![
                         "Never".into(),
                         "Once".into(),
@@ -138,13 +138,14 @@ impl AdModule for ConducktorModule {
         self.notes.clear();
         let w = ctx.surface.width.max(320);
         let h = ctx.surface.height.max(240);
-        for i in 0..14 {
+        let sf = (h as f32 / 480.0).clamp(1.0, 3.2);
+        for i in 0..18 {
             let tint = Self::note_palette(self.color_idx, i);
             self.notes.push(FloatingNote {
-                x: (w / 2 - 120 + (i * 22) % 240) as f32,
-                y: (h / 2 - 40 - (i * 15) % 130) as f32,
-                vx: ((i % 5) as f32 - 2.0) * 1.3,
-                vy: -1.2 - (i % 3) as f32 * 0.5,
+                x: (w / 2 - (w / 4) + ((i * (w / 14)) % (w / 2).max(40))) as f32,
+                y: (h / 2 - (i * (h / 22)) % (h / 2).max(40)) as f32,
+                vx: ((i % 5) as f32 - 2.0) * 1.3 * sf,
+                vy: (-1.2 - (i % 3) as f32 * 0.5) * sf,
                 sprite_idx: 89 + (i as usize % 10),
                 tint,
             });
@@ -162,7 +163,7 @@ impl AdModule for ConducktorModule {
                 }
             }
         };
-        if let Some(loops) = music_loops_from_slider(self.music_raw.max(25)) {
+        if let Some(loops) = music_loops_from_slider(self.music_raw) {
             looney_pack().play_music(ctx.sound, ctx.system.sound_enabled, song, loops);
         }
         looney_pack().play_voice(ctx.sound, ctx.system.sound_enabled, DAFFY_VOICES[7]);
@@ -180,33 +181,76 @@ impl AdModule for ConducktorModule {
 
         let w = ctx.surface.width;
         let h = ctx.surface.height;
-        ctx.surface.pixels_mut().fill(0x000A_0C18);
+        let sf = (h as f32 / 480.0).clamp(1.0, 3.5);
+        let stage_y = (h * 84) / 100;
+        let cx = w / 2;
 
-        // Symphony hall spotlight & podium floor
-        fill_circle_px(ctx.surface, w / 2, h - 72, 130, 0x001A_1E38);
-        crate::looney::fill_box_px(ctx.surface, w / 2 - 70, h - 54, 140, 18, 0x0058_341C);
+        ctx.surface.pixels_mut().fill(0x0008_0B16);
+
+        // Soft warm concert hall spotlight cone beaming onto Maestro Daffy!
+        let beam_top = (w / 16).clamp(24, 80);
+        let beam_bot = (w / 3).clamp(140, 460);
+        {
+            let dst = ctx.surface.pixels_mut();
+            for y in 0..stage_y {
+                let t = y as f32 / stage_y.max(1) as f32;
+                let half = ((beam_top as f32) * (1.0 - t) + (beam_bot as f32) * t * 0.5) as i32;
+                let x0 = (cx - half).max(0);
+                let x1 = (cx + half).min(w);
+                let row = (y * w) as usize;
+                let add_r = (22.0 * (0.35 + 0.65 * t)) as u32;
+                let add_g = (22.0 * (0.35 + 0.65 * t)) as u32;
+                let add_b = (38.0 * (0.35 + 0.65 * t)) as u32;
+                for x in x0..x1 {
+                    let v = dst[row + x as usize];
+                    let r = (((v >> 16) & 0xFF) + add_r).min(255);
+                    let g = (((v >> 8) & 0xFF) + add_g).min(255);
+                    let b = ((v & 0xFF) + add_b).min(255);
+                    dst[row + x as usize] = (r << 16) | (g << 8) | b;
+                }
+            }
+        }
+
+        // Red velvet theater side curtains framing widescreen displays
+        let curt_w = (w / 12).clamp(24, 110);
+        let fold_w = (curt_w / 4).max(6);
+        for i in 0..4 {
+            let col = if i % 2 == 0 { 0x005C_1018 } else { 0x0040_0A10 };
+            fill_box_px(ctx.surface, i * fold_w, 0, fold_w, stage_y, col);
+            fill_box_px(ctx.surface, w - (i + 1) * fold_w, 0, fold_w, stage_y, col);
+        }
+
+        // Polished wood concert stage & conductor's podium
+        fill_box_px(ctx.surface, 0, stage_y, w, h - stage_y, 0x0024_140C);
+        draw_line_px(ctx.surface, 0, stage_y, w - 1, stage_y, 0x008A_5630, (2.0 * sf).round().max(2.0) as i32);
+
+        let pod_w = (160.0 * sf).round() as i32;
+        let pod_h = (26.0 * sf).round() as i32;
+        let pod_y = stage_y - pod_h / 2;
+        fill_box_px(ctx.surface, cx - pod_w / 2, pod_y, pod_w, pod_h, 0x0064_381C);
         draw_line_px(
             ctx.surface,
-            w / 2 - 70,
-            h - 54,
-            w / 2 + 70,
-            h - 54,
-            0x00A8_6E3C,
-            2,
+            cx - pod_w / 2,
+            pod_y,
+            cx + pod_w / 2,
+            pod_y,
+            0x00C8_864A,
+            (2.0 * sf).round().max(2.0) as i32,
         );
 
         let Some(anim) = &self.anim else {
             return AdResult::NoError;
         };
 
-        if self.tick % 4 == 0 && self.notes.len() < 24 {
+        // Proportionally scaled floating colored musical notes
+        if self.tick % 4 == 0 && self.notes.len() < 30 {
             let tint = Self::note_palette(self.color_idx, ctx.rng.rand_mod(6));
             let sp = 89 + (ctx.rng.rand_mod(10) as usize);
-            let ang_vx = (ctx.rng.rand_mod(9) - 4) as f32 * 0.75;
-            let ang_vy = -1.5 - (ctx.rng.rand_mod(5) as f32) * 0.4;
+            let ang_vx = (ctx.rng.rand_mod(11) - 5) as f32 * 0.85 * sf;
+            let ang_vy = (-1.6 - (ctx.rng.rand_mod(5) as f32) * 0.45) * sf;
             self.notes.push(FloatingNote {
-                x: (w / 2 + ctx.rng.rand_mod(40) - 20) as f32,
-                y: (h - 150) as f32,
+                x: (cx + ctx.rng.rand_mod((60.0 * sf) as i32) - (30.0 * sf) as i32) as f32,
+                y: (pod_y as f32 - 110.0 * sf),
                 vx: ang_vx,
                 vy: ang_vy,
                 sprite_idx: sp,
@@ -214,33 +258,35 @@ impl AdModule for ConducktorModule {
             });
         }
 
+        let note_sf = (sf * 1.55).clamp(1.2, 4.5);
         for n in &mut self.notes {
             n.x += n.vx;
             n.y += n.vy;
-            if n.y < 16.0 || n.x < 16.0 || n.x > (w - 16) as f32 {
-                n.x = (w / 2 + (n.sprite_idx as i32 % 30) - 15) as f32;
-                n.y = (h - 145) as f32;
+            if n.y < 16.0 || n.x < curt_w as f32 || n.x > (w - curt_w) as f32 {
+                n.x = (cx + ((n.sprite_idx as i32 % 30) - 15) * 3) as f32;
+                n.y = pod_y as f32 - 105.0 * sf;
             }
             if let Some(sp) = anim.sprites.get(n.sprite_idx) {
-                sp.blit_tinted(ctx.surface, n.x as i32, n.y as i32, n.tint, 1);
+                sp.blit_tinted_f(ctx.surface, n.x as i32, n.y as i32, n.tint, note_sf);
             }
         }
 
+        // Smoothly scaled Maestro Daffy Duck conducting on his podium (~48% of screen height!)
         let n_frames = anim.frames.len().saturating_sub(1);
-        self.frame_idx =
-            crate::looney::advance_filtered_range(anim, self.frame_idx, 0, n_frames, 44, 70, 220, 220);
-        anim.draw_anchored_bottom(ctx.surface, self.frame_idx, w / 2, h - 54, 1, false);
-
-        if let Some(safe_sp) = anim.sprites.get(45) {
-            let drop_y = ((self.tick * 4) as i32 % (h - 110)) - 20;
-            safe_sp.blit(ctx.surface, w / 2 + 120, drop_y);
-        }
+        self.frame_idx = advance_filtered_range(anim, self.frame_idx, 0, n_frames, 44, 70, 220, 220);
+        let daffy_sf = ((h as f32 * 0.48) / 135.0).clamp(1.1, 4.5);
+        anim.draw_anchored_bottom_f(ctx.surface, self.frame_idx, cx, pod_y + 4, daffy_sf, false, true, false);
 
         if self.tick % 85 == 0 {
             let vid = DAFFY_VOICES[(self.tick as usize / 85) % DAFFY_VOICES.len()];
             looney_pack().play_voice(ctx.sound, ctx.system.sound_enabled, vid);
         }
 
+        AdResult::NoError
+    }
+
+    fn do_close(&mut self, ctx: &mut AdContext<'_>) -> AdResult {
+        ctx.sound.stop_all();
         AdResult::NoError
     }
 }

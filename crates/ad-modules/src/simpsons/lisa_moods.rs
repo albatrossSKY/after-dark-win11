@@ -100,7 +100,7 @@ pub struct LisaMoodsModule {
     morph_steps_total: usize,
     hold_ticks: usize,
     tick: usize,
-    scale: i32,
+    scale_f: f32,
 }
 
 impl LisaMoodsModule {
@@ -121,7 +121,7 @@ impl LisaMoodsModule {
             morph_steps_total: 24,
             hold_ticks: 30,
             tick: 0,
-            scale: 1,
+            scale_f: 1.4,
         }
     }
 
@@ -236,7 +236,7 @@ impl AdModule for LisaMoodsModule {
         self.morph_step = 0;
         self.hold_ticks = 22;
         self.tick = 0;
-        self.scale = if ctx.surface.width >= 900 { 2 } else { 1 };
+        self.scale_f = (ctx.surface.height as f32 / 440.0).clamp(1.0, 3.8);
 
         if let Some(loops) = music_loops_from_slider(ctx.module.raw_control_value[2]) {
             let song = match self.active_mood {
@@ -300,20 +300,41 @@ impl AdModule for LisaMoodsModule {
             }
         }
 
-        // Subtle stage floor spotlight under Lisa
-        let lisa_y_bottom = h - 18 * self.scale;
+        // Smooth radial stage floor glow under Lisa
+        let sf = self.scale_f;
+        let lisa_y_bottom = h - (18.0 * sf).round() as i32;
         let lisa_cx = w / 2;
-        for dy in -12..=12 {
-            let py = lisa_y_bottom + dy;
-            if py < 0 || py >= h {
-                continue;
+        {
+            let rx_max = (92.0 * sf).max(32.0);
+            let ry_max = (20.0 * sf).max(8.0);
+            let y0 = (lisa_y_bottom - ry_max as i32).max(0);
+            let y1 = (lisa_y_bottom + ry_max as i32).min(h);
+            let x0 = (lisa_cx - rx_max as i32).max(0);
+            let x1 = (lisa_cx + rx_max as i32).min(w);
+            let dst = ctx.surface.pixels_mut();
+            let ar = ((accent_col >> 16) & 0xFF) as f32;
+            let ag = ((accent_col >> 8) & 0xFF) as f32;
+            let ab = (accent_col & 0xFF) as f32;
+            for py in y0..y1 {
+                let ny = (py - lisa_y_bottom) as f32 / ry_max;
+                let ny2 = ny * ny;
+                let row = (py * w) as usize;
+                for px in x0..x1 {
+                    let nx = (px - lisa_cx) as f32 / rx_max;
+                    let d2 = nx * nx + ny2;
+                    if d2 < 1.0 {
+                        let g = (1.0 - d2) * (1.0 - d2) * 0.28;
+                        let bgp = dst[row + px as usize];
+                        let r = (((bgp >> 16) & 0xFF) as f32 + ar * g).min(255.0) as u32;
+                        let gr = (((bgp >> 8) & 0xFF) as f32 + ag * g).min(255.0) as u32;
+                        let b = ((bgp & 0xFF) as f32 + ab * g).min(255.0) as u32;
+                        dst[row + px as usize] = (r << 16) | (gr << 8) | b;
+                    }
+                }
             }
-            let rx = ((1.0 - (dy as f32 / 12.0).powi(2)).max(0.0).sqrt() * 68.0 * self.scale as f32)
-                as i32;
-            fill_rect_px(ctx.surface, lisa_cx - rx, py, lisa_cx + rx, py + 1, 0x0026_2448);
         }
 
-        // Draw smoothly morphing subconscious vision in upper/center 65% of screen!
+        // Draw smoothly morphing subconscious vision in upper/center 64% of screen!
         let pool = self.current_pool();
         if !pool.is_empty() {
             let s0 = &pool[self.from_idx % pool.len()];
@@ -327,11 +348,14 @@ impl AdModule for LisaMoodsModule {
             let t = t_lin * t_lin * (3.0 - 2.0 * t_lin);
 
             let vision_cx = w as f32 * 0.5;
-            let vision_cy = (h as f32 * 0.37).max(60.0);
-            let radius = (w.min(h) as f32 * 0.28).max(46.0);
+            let vision_cy = (h as f32 * 0.36).max(60.0);
+            let radius = (w.min(h) as f32 * 0.30).max(52.0);
             let breathe = 1.0 + (self.tick as f32 * 0.06).sin() * 0.03;
             let r = radius * breathe;
-            let thick = if w >= 900 { 3 } else { 2 };
+            let thick = (2.6 * sf).round().clamp(2.0, 9.0) as i32;
+            let halo_col = (((line_col >> 16) & 0xFF) / 3) << 16
+                | (((line_col >> 8) & 0xFF) / 3) << 8
+                | ((line_col & 0xFF) / 3);
 
             let mut prev: Option<(i32, i32)> = None;
             for i in 0..MORPH_SAMPLES {
@@ -347,6 +371,7 @@ impl AdModule for LisaMoodsModule {
                         // Avoid stray giant teleport lines between unrelated strokes
                         if (sx - px).abs() + (sy - py).abs() < (radius as i32) {
                             let col = if (i & 7) == 0 { accent_col } else { line_col };
+                            draw_line_px(ctx.surface, px, py, sx, sy, halo_col, thick + 2);
                             draw_line_px(ctx.surface, px, py, sx, sy, col, thick);
                         }
                     }
@@ -355,29 +380,64 @@ impl AdModule for LisaMoodsModule {
             }
         }
 
-        // Draw animated Lisa playing saxophone at bottom-center (all 33 frames!)
-        if !self.lisa_bank.frames.is_empty() {
-            let fi = (self.tick / 3) % self.lisa_bank.frames.len();
+        // Draw authentic stage floor spotlight (#1000[32]) + full-body Lisa playing sax (#1000[10..=31])!
+        // NOTE: Frames 0..=9 are small eye/reed/hand fragments and frame 32 is the floor spotlight oval —
+        // NEVER cycle frames 0..=9 or 32 as Lisa's body!
+        if self.lisa_bank.frames.len() >= 32 {
+            // 1. Authentic stage spotlight oval (#32, 110x53) directly under Lisa's feet
+            if let Some(spot) = self.lisa_bank.frames.get(32) {
+                let sw = (spot.w as f32 * sf).round() as i32;
+                let sh = (spot.h as f32 * sf).round() as i32;
+                spot.blit_transformed_f(
+                    ctx.surface,
+                    lisa_cx - sw / 2,
+                    lisa_y_bottom - (sh * 2) / 3,
+                    sf,
+                    false,
+                    false,
+                    false,
+                    true,
+                );
+            }
+            // 2. Smooth mood-matched full-body saxophone ping-pong cycle:
+            //    - Angry (2): intense passionate sax swings (#10..=23)
+            //    - Sad   (1): slow swaying blues sax (#24..=31)
+            //    - Happy (0): lively full solo alternating #10..=23 & #24..=31!
+            let (start_f, end_f, div) = match self.active_mood {
+                2 => (10usize, 23usize, 3usize),
+                1 => (24usize, 31usize, 5usize),
+                _ => (10usize, 31usize, 4usize),
+            };
+            let count = end_f - start_f + 1;
+            let span = (count.saturating_sub(1) * 2).max(1);
+            let step = (self.tick / div) % span;
+            let fi = start_f + if step < count { step } else { span - step };
             let sp = &self.lisa_bank.frames[fi];
-            let lx = lisa_cx - (sp.w * self.scale) / 2;
-            let ly = lisa_y_bottom - sp.h * self.scale;
-            sp.blit_scaled(ctx.surface, lx, ly, self.scale);
+            let lw = (sp.w as f32 * sf).round() as i32;
+            let lh = (sp.h as f32 * sf).round() as i32;
+            let lx = lisa_cx - lw / 2;
+            let ly = lisa_y_bottom - lh;
+            sp.blit_transformed_f(ctx.surface, lx, ly, sf, false, false, false, false);
 
-            // Floating glowing musical sparks drifting upward from Lisa's sax bell
-            for k in 0..4 {
-                let phase = ((self.tick * 2 + k * 23) % 90) as f32;
-                let nx = lisa_cx + (20 * self.scale) + ((phase * 0.14 + k as f32).sin() * 24.0) as i32;
-                let ny = ly + (36 * self.scale) - (phase * 1.3 * self.scale as f32) as i32;
+            // Floating glowing musical notes drifting upward from Lisa's sax bell
+            let nr = (2.4 * sf).round().max(2.0) as i32;
+            let stem_w = sf.round().max(1.0) as i32;
+            for k in 0..5 {
+                let phase = ((self.tick * 2 + k * 21) % 95) as f32;
+                let nx = lisa_cx
+                    + (22.0 * sf) as i32
+                    + ((phase * 0.14 + k as f32).sin() * 28.0 * sf) as i32;
+                let ny = ly + (36.0 * sf) as i32 - (phase * 1.4 * sf) as i32;
                 if ny > 10 {
-                    fill_circle_px(ctx.surface, nx, ny, 2 * self.scale, accent_col);
+                    fill_circle_px(ctx.surface, nx, ny, nr, accent_col);
                     draw_line_px(
                         ctx.surface,
-                        nx + 2 * self.scale,
+                        nx + nr,
                         ny,
-                        nx + 2 * self.scale,
-                        ny - 9 * self.scale,
+                        nx + nr,
+                        ny - (10.0 * sf) as i32,
                         accent_col,
-                        self.scale,
+                        stem_w,
                     );
                 }
             }

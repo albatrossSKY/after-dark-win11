@@ -116,11 +116,17 @@ struct SpritePair {
     mask_r: [AdSurface; 2],
 }
 
-fn bitmap_to_surface(bmp: &AdBitmap) -> Option<AdSurface> {
-    let mut surf = AdSurface::new(bmp.width, bmp.height)?;
+fn bitmap_to_surface_scaled(bmp: &AdBitmap, scale_f: f32) -> Option<AdSurface> {
+    let dw = (bmp.width as f32 * scale_f).round().max(1.0) as i32;
+    let dh = (bmp.height as f32 * scale_f).round().max(1.0) as i32;
+    let mut surf = AdSurface::new(dw, dh)?;
     surf.set_text_color(rgb(0, 0, 0));
     surf.set_bk_color(rgb(255, 255, 255));
-    surf.bit_blt_bitmap(0, 0, bmp.width, bmp.height, bmp, 0, 0, ROP_SRCCOPY);
+    if dw == bmp.width && dh == bmp.height {
+        surf.bit_blt_bitmap(0, 0, bmp.width, bmp.height, bmp, 0, 0, ROP_SRCCOPY);
+    } else {
+        surf.stretch_blt_bitmap(0, 0, dw, dh, bmp, 0, 0, bmp.width, bmp.height, ROP_SRCCOPY);
+    }
     Some(surf)
 }
 
@@ -152,6 +158,8 @@ struct Creature {
 pub struct AquaticRealmModule {
     sprites: Vec<SpritePair>, // index 0 -> species 1, ..., index 12 -> species 13
     seafloor: Option<AdSurface>,
+    loaded_scale_x100: i32,
+    scale_f: f32,
     floor_y: i32,
     floor_h: i32,
     min_species: usize,
@@ -166,6 +174,8 @@ impl AquaticRealmModule {
         Self {
             sprites: Vec::new(),
             seafloor: None,
+            loaded_scale_x100: 0,
+            scale_f: 1.0,
             floor_y: 416,
             floor_h: 64,
             min_species: 2,
@@ -208,8 +218,9 @@ impl AquaticRealmModule {
         }
     }
 
-    fn load_assets(&mut self) -> bool {
-        if !self.sprites.is_empty() && self.seafloor.is_some() {
+    fn load_assets(&mut self, scale_f: f32) -> bool {
+        let key = (scale_f * 100.0).round() as i32;
+        if !self.sprites.is_empty() && self.seafloor.is_some() && self.loaded_scale_x100 == key {
             return true;
         }
         self.sprites.clear();
@@ -223,10 +234,10 @@ impl AquaticRealmModule {
                 return false;
             };
             let (Some(sc0), Some(sc1), Some(sm0), Some(sm1)) = (
-                bitmap_to_surface(&bc0),
-                bitmap_to_surface(&bc1),
-                bitmap_to_surface(&bm0),
-                bitmap_to_surface(&bm1),
+                bitmap_to_surface_scaled(&bc0, scale_f),
+                bitmap_to_surface_scaled(&bc1, scale_f),
+                bitmap_to_surface_scaled(&bm0, scale_f),
+                bitmap_to_surface_scaled(&bm1, scale_f),
             ) else {
                 return false;
             };
@@ -249,9 +260,12 @@ impl AquaticRealmModule {
         }
 
         if let Some(fb) = AdBitmap::from_bmp_bytes(SEAFLOOR_BMP) {
-            self.floor_h = fb.height;
-            self.seafloor = bitmap_to_surface(&fb);
+            if let Some(fs) = bitmap_to_surface_scaled(&fb, scale_f) {
+                self.floor_h = fs.height;
+                self.seafloor = Some(fs);
+            }
         }
+        self.loaded_scale_x100 = key;
         self.seafloor.is_some()
     }
 
@@ -415,7 +429,8 @@ impl AdModule for AquaticRealmModule {
     }
 
     fn do_initialize(&mut self, ctx: &mut AdContext<'_>) -> AdResult {
-        if !self.load_assets() {
+        self.scale_f = (ctx.module.rgn_height as f32 / 480.0).clamp(1.0, 4.0);
+        if !self.load_assets(self.scale_f) {
             return AdResult::MemError;
         }
         self.tick = 0;
@@ -443,22 +458,27 @@ impl AdModule for AquaticRealmModule {
         self.tick = self.tick.wrapping_add(1);
         let toggle_anim = (self.tick & 1) == 0;
 
+        let sp = self.scale_f.round().max(1.0) as i32;
+        let margin_l = -(75.0 * self.scale_f).round() as i32;
+        let margin_r = (20.0 * self.scale_f).round() as i32;
+        let kelp_margin = (36.0 * self.scale_f).round() as i32;
+
         // 1. Update all creatures (`1:0F64..1:12C2`)
         for i in 0..self.total_count {
             let c = self.creatures[i];
-            let off_x = c.x <= -75 || c.x >= w + 20;
-            let off_bubble = c.species == 13 && c.y <= -70;
+            let off_x = c.x <= margin_l || c.x >= w + margin_r;
+            let off_bubble = c.species == 13 && c.y <= margin_l;
 
             if off_x || off_bubble {
                 self.respawn_creature(i, ctx);
             } else if c.species == 13 {
-                self.creatures[i].y -= 3;
+                self.creatures[i].y -= 3 * sp;
             } else {
-                self.creatures[i].x += self.creatures[i].dx;
+                self.creatures[i].x += self.creatures[i].dx * sp;
                 if self.creatures[i].species != 1
                     && ctx.rng.rand() < 4200
-                    && self.creatures[i].x > 60
-                    && self.creatures[i].x < w - 124
+                    && self.creatures[i].x > 60 * sp
+                    && self.creatures[i].x < w - 124 * sp
                 {
                     if self.creatures[i].species == 12 {
                         self.creatures[i].dx += ctx.rng.rand_mod(3) - 1;
@@ -472,10 +492,10 @@ impl AdModule for AquaticRealmModule {
                 }
 
                 if self.creatures[i].species != 1 && self.creatures[i].species != 2 {
-                    if self.creatures[i].y > self.floor_y - 36 && self.creatures[i].dy > 0 {
+                    if self.creatures[i].y > self.floor_y - kelp_margin && self.creatures[i].dy > 0 {
                         self.creatures[i].dy = ctx.rng.rand_mod(2) - 1;
                     }
-                    self.creatures[i].y = (self.creatures[i].y + self.creatures[i].dy).max(2);
+                    self.creatures[i].y = (self.creatures[i].y + self.creatures[i].dy * sp).max(2);
                     self.creatures[i].dy =
                         (self.creatures[i].dy + ctx.rng.rand_mod(3) - 1).clamp(-3, 3);
                 }

@@ -1,11 +1,9 @@
 //! "Wockets' Wed Gware" — Classic 1995 *Looney Tunes* After Dark 3.0 module.
 //!
-//! *"Ooooh! Aaaah!"* Looney Tunes spectators (`RLEP #10001` frames `37..=45`)
-//! watch from the bottom of the screen as rockets launch into the night sky and
-//! explode into 24 glowing Looney Tunes character-face constellations (`RLEP #10000`
-//! frames `12..=28` & `RLEP #10001` frames `30..=36`) and `SPrK #10000..#10023`
-//! particle bursts, illuminating the spectators below with `FIREWORKS_SFX`
-//! (`#15300..#15305`) and the *Wockets' Wed Gware* MIDI theme (`#20`).
+//! Full-widescreen night sky fireworks show with proportionally scaled Looney
+//! Tunes character-face constellations (`RLEP #10000/#10001`), `SPrK` particle
+//! bursts, illuminated silhouetted spectators (`37..=45`), `FIREWORKS_SFX`,
+//! and the *Wockets' Wed Gware* MIDI theme (`#20`).
 
 use ad_sdk::{AdContext, AdControl, AdMetadata, AdModule, AdResult};
 
@@ -52,7 +50,7 @@ impl WocketsModule {
         Self {
             fireworks_raw: 34,
             spectators_raw: 52,
-            music_raw: 21,
+            music_raw: 25,
             bank: None,
             sprks: Vec::new(),
             bursts: Vec::new(),
@@ -82,7 +80,7 @@ impl WocketsModule {
                 },
                 AdControl::LabeledSlider {
                     title: "Music:".to_string(),
-                    default_raw: 21,
+                    default_raw: 25,
                     labels: vec![
                         "Never".into(),
                         "Once".into(),
@@ -125,8 +123,9 @@ impl WocketsModule {
         let idx = seed % CHAR_BURST_IDS.len();
         let char_sprite = CHAR_BURST_IDS[idx];
         let color = FIREWORK_COLORS[seed % FIREWORK_COLORS.len()];
-        let bx = 110 + ((seed as i32 * 137) % (w - 220).max(60));
-        let by = 95 + ((seed as i32 * 83) % (h - 240).max(50));
+        let pad_x = (w / 7).max(80);
+        let bx = pad_x + ((seed as i32 * 173) % (w - pad_x * 2).max(60));
+        let by = (h * 18 / 100) + ((seed as i32 * 97) % (h * 44 / 100).max(50));
         let sprk_idx = if self.sprks.is_empty() {
             0
         } else {
@@ -168,13 +167,13 @@ impl AdModule for WocketsModule {
             self.spawn_burst(w, h, i * 5 + 1);
             if let Some(last) = self.bursts.last_mut() {
                 last.age = (i as u32) * 10 + 10;
-                last.x = 140 + (i as i32) * ((w - 280).max(80) / 2);
-                last.y = 115 + ((i as i32) % 2) * 45;
+                last.x = (w / 4) + (i as i32) * (w / 4);
+                last.y = (h * 26 / 100) + ((i as i32) % 2) * (h * 12 / 100);
             }
         }
         ctx.surface.pixels_mut().fill(0x0002_040C);
 
-        if let Some(loops) = music_loops_from_slider(self.music_raw.max(25)) {
+        if let Some(loops) = music_loops_from_slider(self.music_raw) {
             looney_pack().play_music(ctx.sound, ctx.system.sound_enabled, SONG_WOCKETS, loops);
         }
         looney_pack().play_voice(ctx.sound, ctx.system.sound_enabled, FIREWORKS_SFX[0]);
@@ -192,19 +191,23 @@ impl AdModule for WocketsModule {
 
         let w = ctx.surface.width;
         let h = ctx.surface.height;
+        let sf = (h as f32 / 480.0).clamp(1.0, 3.6);
+        let burst_sf = (sf * 1.35).clamp(1.1, 4.0);
         ctx.surface.pixels_mut().fill(0x0002_040C);
 
-        for i in 0..28 {
-            let sx = (i * 197 + 43) % w;
-            let sy = (i * 89 + 19) % (h - 120).max(60);
-            fill_circle_px(ctx.surface, sx, sy, 1, 0x0050_6088);
+        let star_count = ((w * h) / 8500).clamp(36, 180);
+        for i in 0..star_count {
+            let sx = (i * 211 + 43) % w;
+            let sy = (i * 97 + 19) % ((h * 76) / 100).max(60);
+            let r = if i % 9 == 0 && h >= 720 { 2 } else { 1 };
+            fill_circle_px(ctx.surface, sx, sy, r, 0x0058_6A98);
         }
 
-        let target_bursts = (2 + (self.fireworks_raw as usize * 4) / 100).clamp(2, 6);
-        if self.bursts.len() < target_bursts && self.tick % 12 == 0 {
+        let target_bursts = (2 + (self.fireworks_raw as usize * 5) / 100).clamp(2, 7);
+        if self.bursts.len() < target_bursts && self.tick % 11 == 0 {
             let seed = (ctx.rng.rand_mod(1000) as usize).wrapping_add(self.tick as usize);
             self.spawn_burst(w, h, seed);
-            let sfx = FIREWORKS_SFX[(self.tick as usize / 12) % FIREWORKS_SFX.len()];
+            let sfx = FIREWORKS_SFX[(self.tick as usize / 11) % FIREWORKS_SFX.len()];
             looney_pack().play_voice(ctx.sound, ctx.system.sound_enabled, sfx);
         }
 
@@ -219,41 +222,35 @@ impl AdModule for WocketsModule {
             dominant_color = b.color;
 
             if b.age < 8 {
-                let ry = h - 90 - ((h - 90 - b.y) * (b.age as i32)) / 8;
+                let launch_y = h - (90.0 * sf) as i32;
+                let ry = launch_y - ((launch_y - b.y) * (b.age as i32)) / 8;
                 if let Some(rk) = bank.frames.first() {
-                    rk.blit_tinted(ctx.surface, b.x - rk.w / 2, ry, b.color, 1);
+                    let rkw = (rk.w as f32 * burst_sf) as i32;
+                    rk.blit_tinted_f(ctx.surface, b.x - rkw / 2, ry, b.color, burst_sf);
                 }
             } else {
                 if let Some(ch_sp) = bank.frames.get(b.char_sprite) {
-                    let drop = ((b.age.saturating_sub(8)) as i32) / 3;
-                    ch_sp.blit_tinted(
-                        ctx.surface,
-                        b.x - ch_sp.w / 2,
-                        b.y - ch_sp.h / 2 + drop,
-                        b.color,
-                        1,
-                    );
+                    let drop = (((b.age.saturating_sub(8)) as f32) * 0.35 * sf) as i32;
+                    let cw = (ch_sp.w as f32 * burst_sf) as i32;
+                    let ch = (ch_sp.h as f32 * burst_sf) as i32;
+                    ch_sp.blit_tinted_f(ctx.surface, b.x - cw / 2, b.y - ch / 2 + drop, b.color, burst_sf);
                 }
 
                 let ring_stage = ((b.age - 8) / 4) as usize;
                 if ring_stage <= 3 {
                     if let Some(ring) = bank.frames.get(2 + ring_stage) {
-                        ring.blit_tinted(
-                            ctx.surface,
-                            b.x - ring.w / 2,
-                            b.y - ring.h / 2,
-                            0xFFFF_D0,
-                            1,
-                        );
+                        let rw = (ring.w as f32 * burst_sf) as i32;
+                        let rh = (ring.h as f32 * burst_sf) as i32;
+                        ring.blit_tinted_f(ctx.surface, b.x - rw / 2, b.y - rh / 2, 0xFFFF_D0, burst_sf);
                     }
                 }
 
                 if let Some(pts) = self.sprks.get(b.sprk_idx) {
                     let t = (b.age - 8) as f32 / 36.0;
-                    let gravity = t * t * 38.0;
+                    let gravity = t * t * 42.0 * sf;
                     for &(ang_b, rad_b, kind_b) in pts.iter().step_by(2) {
                         let ang = (ang_b as f32) * std::f32::consts::TAU / 256.0;
-                        let dist = (rad_b as f32) * 0.48 * t;
+                        let dist = (rad_b as f32) * 0.52 * t * burst_sf;
                         let px = b.x + (ang.cos() * dist) as i32;
                         let py = b.y + (ang.sin() * dist + gravity) as i32;
                         let sp_id = match kind_b {
@@ -262,13 +259,9 @@ impl AdModule for WocketsModule {
                             _ => 7,
                         };
                         if let Some(sp) = bank.frames.get(sp_id) {
-                            sp.blit_tinted(
-                                ctx.surface,
-                                px - sp.w / 2,
-                                py - sp.h / 2,
-                                b.color,
-                                1,
-                            );
+                            let sw = (sp.w as f32 * burst_sf) as i32;
+                            let sh = (sp.h as f32 * burst_sf) as i32;
+                            sp.blit_tinted_f(ctx.surface, px - sw / 2, py - sh / 2, b.color, burst_sf);
                         }
                     }
                 }
@@ -277,20 +270,28 @@ impl AdModule for WocketsModule {
 
         self.bursts.retain(|b| b.age < b.max_age);
 
+        // Silhouetted Looney Tunes spectators along the bottom edge, smoothly scaled!
         let num_specs = ((self.spectators_raw * 9) / 100).clamp(1, 9) as usize;
         let spec_ids = [37usize, 38, 39, 40, 41, 42, 43, 44, 45];
+        let spec_sf = (sf * 1.25).clamp(1.0, 3.6);
         let spacing = w / (num_specs as i32 + 1).max(2);
         for (i, &sid) in spec_ids.iter().take(num_specs).enumerate() {
             if let Some(spec) = bank.frames.get(sid) {
-                let sx = spacing * (i as i32 + 1) - spec.w / 2;
-                let sy = h - spec.h;
-                let tint =
-                    FIREWORK_COLORS[(i + (self.tick as usize / 16)) % FIREWORK_COLORS.len()];
+                let sw = (spec.w as f32 * spec_sf).round() as i32;
+                let sh = (spec.h as f32 * spec_sf).round() as i32;
+                let sx = spacing * (i as i32 + 1) - sw / 2;
+                let sy = h - sh;
+                let tint = FIREWORK_COLORS[(i + (self.tick as usize / 16)) % FIREWORK_COLORS.len()];
                 let chosen = if i % 2 == 0 { dominant_color } else { tint };
-                spec.blit_tinted(ctx.surface, sx, sy, chosen, 1);
+                spec.blit_tinted_f(ctx.surface, sx, sy, chosen, spec_sf);
             }
         }
 
+        AdResult::NoError
+    }
+
+    fn do_close(&mut self, ctx: &mut AdContext<'_>) -> AdResult {
+        ctx.sound.stop_all();
         AdResult::NoError
     }
 }

@@ -501,9 +501,9 @@ fn verify_all_65_modules_and_render_contact_sheets() {
         write_surface_png(&sheet, &out_path);
     }
 
-    // 6. Also render dedicated high-res 640x480 contact sheets of ALL 15 Simpsons modules!
-    let sim_w = 640i32;
-    let sim_h = 480i32;
+    // 6. Render dedicated high-res 16:9 widescreen (960x540) contact sheets of ALL 15 Simpsons modules!
+    let sim_w = 960i32;
+    let sim_h = 540i32;
     let mut sim_rendered: Vec<(String, String, AdSurface)> = Vec::new();
     let simpsons_entries: Vec<_> = catalog
         .iter()
@@ -570,10 +570,10 @@ fn verify_all_65_modules_and_render_contact_sheets() {
         sim_rendered.push((meta.name, meta.id, snap));
     }
 
-    let s_cols = 3i32;
+    let s_cols = 2i32;
     let s_cell_w = sim_w + pad;
     let s_cell_h = sim_h + hdr_h + pad;
-    for (si, chunk) in sim_rendered.chunks(9).enumerate() {
+    for (si, chunk) in sim_rendered.chunks(8).enumerate() {
         let rows = ((chunk.len() as i32) + s_cols - 1) / s_cols;
         let sw = s_cols * s_cell_w + pad;
         let sh = rows * s_cell_h + pad;
@@ -585,7 +585,14 @@ fn verify_all_65_modules_and_render_contact_sheets() {
             let x = pad + c * s_cell_w;
             let y = pad + r * s_cell_h;
             sheet.fill_rect_rgb(x, y, x + sim_w, y + hdr_h, rgb(180, 130, 12));
-            draw_centered_label(&mut sheet, x, y, sim_w, hdr_h, &format!("{} ({})", name, id));
+            draw_centered_label(
+                &mut sheet,
+                x,
+                y,
+                sim_w,
+                hdr_h,
+                &format!("{} ({}) — 16:9 HD", name, id),
+            );
             unsafe {
                 BitBlt(
                     sheet.hdc(),
@@ -603,7 +610,9 @@ fn verify_all_65_modules_and_render_contact_sheets() {
         write_surface_png(&sheet, &snap_dir.join(format!("simpsons_sheet_{}.png", si + 1)));
     }
 
-    // 7. Also render dedicated high-res 640x480 contact sheets of ALL 13 Star Trek: TNG modules!
+    // 7. Render dedicated high-res 16:9 widescreen (960x540) contact sheets of ALL 13 Star Trek: TNG modules!
+    let tng_w = 960;
+    let tng_h = 540;
     let mut tng_rendered: Vec<(String, String, AdSurface)> = Vec::new();
     let tng_entries: Vec<_> = catalog
         .iter()
@@ -614,13 +623,13 @@ fn verify_all_65_modules_and_render_contact_sheets() {
     for (idx, entry) in tng_entries.iter().enumerate() {
         let mut module = create_module_by_id(&entry.meta.id, &rand_pool, &empty_ctrls).unwrap();
         let meta = module.metadata();
-        let mut surface = AdSurface::new(sim_w, sim_h).unwrap();
+        let mut surface = AdSurface::new(tng_w, tng_h).unwrap();
         paint_synthetic_win31_desktop(&mut surface);
 
-        let mut system = AdSystem::new(sim_w, sim_h, SaverMode::Saver);
+        let mut system = AdSystem::new(tng_w, tng_h, SaverMode::Saver);
         system.sound_enabled = false;
         system.data_dir = assets_dir.to_string_lossy().to_string();
-        let mut params = AdModuleParams::new(sim_w, sim_h, &meta.controls);
+        let mut params = AdModuleParams::new(tng_w, tng_h, &meta.controls);
         let mut rng = MsvcRand::new(1701 + (idx as u32) * 47);
 
         let step_ms = meta.target_frame_ms.max(16) as u64;
@@ -669,26 +678,29 @@ fn verify_all_65_modules_and_render_contact_sheets() {
         tng_rendered.push((meta.name, meta.id, snap));
     }
 
-    for (si, chunk) in tng_rendered.chunks(9).enumerate() {
-        let rows = ((chunk.len() as i32) + s_cols - 1) / s_cols;
-        let sw = s_cols * s_cell_w + pad;
-        let sh = rows * s_cell_h + pad;
+    let t_cols = 2;
+    let t_cell_w = tng_w + pad;
+    let t_cell_h = tng_h + hdr_h + pad;
+    for (si, chunk) in tng_rendered.chunks(8).enumerate() {
+        let rows = ((chunk.len() as i32) + t_cols - 1) / t_cols;
+        let sw = t_cols * t_cell_w + pad;
+        let sh = rows * t_cell_h + pad;
         let mut sheet = AdSurface::new(sw, sh).unwrap();
         sheet.fill_rect_rgb(0, 0, sw, sh, rgb(12, 16, 28));
         for (i, (name, id, tile)) in chunk.iter().enumerate() {
-            let c = (i as i32) % s_cols;
-            let r = (i as i32) / s_cols;
-            let x = pad + c * s_cell_w;
-            let y = pad + r * s_cell_h;
-            sheet.fill_rect_rgb(x, y, x + sim_w, y + hdr_h, rgb(155, 85, 195));
-            draw_centered_label(&mut sheet, x, y, sim_w, hdr_h, &format!("{} ({})", name, id));
+            let c = (i as i32) % t_cols;
+            let r = (i as i32) / t_cols;
+            let x = pad + c * t_cell_w;
+            let y = pad + r * t_cell_h;
+            sheet.fill_rect_rgb(x, y, x + tng_w, y + hdr_h, rgb(155, 85, 195));
+            draw_centered_label(&mut sheet, x, y, tng_w, hdr_h, &format!("{} ({}) — 16:9 HD", name, id));
             unsafe {
                 BitBlt(
                     sheet.hdc(),
                     x,
                     y + hdr_h,
-                    sim_w,
-                    sim_h,
+                    tng_w,
+                    tng_h,
                     tile.hdc(),
                     0,
                     0,
@@ -699,7 +711,7 @@ fn verify_all_65_modules_and_render_contact_sheets() {
         write_surface_png(&sheet, &snap_dir.join(format!("tng_sheet_{}.png", si + 1)));
     }
 
-    // 8. Also render dedicated high-res 640x480 contact sheets of ALL 12 Looney Tunes modules!
+    // 8. Render dedicated high-res 16:9 widescreen (960x540) contact sheets of ALL 12 Looney Tunes modules!
     let mut looney_rendered: Vec<(String, String, AdSurface)> = Vec::new();
     let looney_entries: Vec<_> = catalog
         .iter()
@@ -775,7 +787,14 @@ fn verify_all_65_modules_and_render_contact_sheets() {
             let x = pad + c * s_cell_w;
             let y = pad + r * s_cell_h;
             sheet.fill_rect_rgb(x, y, x + sim_w, y + hdr_h, rgb(195, 52, 28));
-            draw_centered_label(&mut sheet, x, y, sim_w, hdr_h, &format!("{} ({})", name, id));
+            draw_centered_label(
+                &mut sheet,
+                x,
+                y,
+                sim_w,
+                hdr_h,
+                &format!("{} ({}) — 16:9 HD", name, id),
+            );
             unsafe {
                 BitBlt(
                     sheet.hdc(),
@@ -791,5 +810,101 @@ fn verify_all_65_modules_and_render_contact_sheets() {
             }
         }
         write_surface_png(&sheet, &snap_dir.join(format!("looney_sheet_{}.png", si + 1)));
+    }
+
+    // 9. Render dedicated 16:9 HD (1280x720) showcase sheet of the upgraded Classic 1991 modules!
+    let cls_ids = [
+        "toasters", "clocks", "aqua", "nocturne", "globe", "logo", "slidesho", "starry",
+        "grafstat", "message", "spotlite", "worms",
+    ];
+    let cls_w = 960i32;
+    let cls_h = 540i32;
+    let mut cls_rendered: Vec<(String, String, AdSurface)> = Vec::new();
+    for (idx, cid) in cls_ids.iter().enumerate() {
+        let mut module = create_module_by_id(cid, &rand_pool, &empty_ctrls).unwrap();
+        let meta = module.metadata();
+        let mut surface = AdSurface::new(cls_w, cls_h).unwrap();
+        paint_synthetic_win31_desktop(&mut surface);
+        let mut system = AdSystem::new(cls_w, cls_h, SaverMode::Saver);
+        system.sound_enabled = false;
+        system.data_dir = assets_dir.to_string_lossy().to_string();
+        system.slide_show_dir = assets_dir.join("bitmaps").to_string_lossy().to_string();
+        let mut params = AdModuleParams::new(cls_w, cls_h, &meta.controls);
+        let mut rng = MsvcRand::new(1991 + (idx as u32) * 73);
+        let step_ms = meta.target_frame_ms.max(16) as u64;
+        let frames = if *cid == "nocturne" { 160 } else { 90 };
+        {
+            let mut ctx = AdContext {
+                system: &mut system,
+                module: &mut params,
+                surface: &mut surface,
+                sound: &sound,
+                rng: &mut rng,
+                elapsed_ms: 0,
+            };
+            let _ = module.do_initialize(&mut ctx);
+            let _ = module.do_blank(&mut ctx);
+        }
+        for f in 1..=frames {
+            let mut ctx = AdContext {
+                system: &mut system,
+                module: &mut params,
+                surface: &mut surface,
+                sound: &sound,
+                rng: &mut rng,
+                elapsed_ms: (f as u64) * step_ms,
+            };
+            let _ = module.do_draw_frame(&mut ctx);
+        }
+        let snap = surface.clone_surface().unwrap();
+        {
+            let mut ctx = AdContext {
+                system: &mut system,
+                module: &mut params,
+                surface: &mut surface,
+                sound: &sound,
+                rng: &mut rng,
+                elapsed_ms: (frames as u64) * step_ms,
+            };
+            let _ = module.do_close(&mut ctx);
+        }
+        cls_rendered.push((meta.name, meta.id, snap));
+    }
+
+    for (si, chunk) in cls_rendered.chunks(6).enumerate() {
+        let rows = ((chunk.len() as i32) + s_cols - 1) / s_cols;
+        let sw = s_cols * s_cell_w + pad;
+        let sh = rows * s_cell_h + pad;
+        let mut sheet = AdSurface::new(sw, sh).unwrap();
+        sheet.fill_rect_rgb(0, 0, sw, sh, rgb(16, 20, 30));
+        for (i, (name, id, tile)) in chunk.iter().enumerate() {
+            let c = (i as i32) % s_cols;
+            let r = (i as i32) / s_cols;
+            let x = pad + c * s_cell_w;
+            let y = pad + r * s_cell_h;
+            sheet.fill_rect_rgb(x, y, x + cls_w, y + hdr_h, rgb(42, 76, 138));
+            draw_centered_label(
+                &mut sheet,
+                x,
+                y,
+                cls_w,
+                hdr_h,
+                &format!("{} ({}) — 16:9 HD", name, id),
+            );
+            unsafe {
+                BitBlt(
+                    sheet.hdc(),
+                    x,
+                    y + hdr_h,
+                    cls_w,
+                    cls_h,
+                    tile.hdc(),
+                    0,
+                    0,
+                    ROP_SRCCOPY,
+                );
+            }
+        }
+        write_surface_png(&sheet, &snap_dir.join(format!("classic_hd_sheet_{}.png", si + 1)));
     }
 }

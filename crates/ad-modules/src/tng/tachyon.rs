@@ -1,8 +1,8 @@
 //! *Tachyon Particle Field* — 1994 *Star Trek: The Next Generation* After Dark 3.0 Module.
 //!
-//! Inspired by *Redemption, Part II*: Federation tachyon detection emitters
-//! weave an active sub-space particle field held in isolation, rippling with
-//! shimmering interference waves whenever a cloaked Romulan vessel crosses the net.
+//! Full-widescreen HD/4K Federation tachyon detection emitter grid inspired by
+//! *Redemption, Part II*: particle density, beam reach, cloak disruption radius,
+//! core glow, and line width all scale cleanly with monitor resolution & aspect ratio.
 
 use ad_sdk::{AdContext, AdControl, AdMetadata, AdModule, AdResult};
 
@@ -24,6 +24,7 @@ pub struct TachyonModule {
     anomaly_y: f32,
     anomaly_vx: f32,
     anomaly_vy: f32,
+    scale_f: f32,
     tick: usize,
 }
 
@@ -35,6 +36,7 @@ impl TachyonModule {
             anomaly_y: 0.0,
             anomaly_vx: 2.2,
             anomaly_vy: 1.1,
+            scale_f: 1.0,
             tick: 0,
         }
     }
@@ -71,10 +73,16 @@ impl AdModule for TachyonModule {
     fn do_initialize(&mut self, ctx: &mut AdContext<'_>) -> AdResult {
         let w = ctx.surface.width.max(120) as f32;
         let h = ctx.surface.height.max(100) as f32;
+        self.scale_f = (h / 480.0).clamp(0.85, 3.5);
+        let sf = self.scale_f;
+
+        // Scale particle count with aspect ratio & resolution so 16:9 / 21:9 / 4K stay lush & connected!
+        let aspect = (w / h).clamp(1.0, 2.8);
+        let count = (36.0 * aspect).round().clamp(42.0, 96.0) as usize;
         self.particles.clear();
-        for i in 0..42 {
-            let angle = (i as f32 / 42.0) * std::f32::consts::TAU;
-            let spd = 1.2 + (ctx.rng.rand_mod(24) as f32) * 0.1;
+        for i in 0..count {
+            let angle = (i as f32 / count as f32) * std::f32::consts::TAU;
+            let spd = (1.3 + (ctx.rng.rand_mod(24) as f32) * 0.1) * sf;
             self.particles.push(TachyonParticle {
                 x: ctx.rng.rand_mod(w as i32) as f32,
                 y: ctx.rng.rand_mod(h as i32) as f32,
@@ -86,8 +94,8 @@ impl AdModule for TachyonModule {
         }
         self.anomaly_x = w * 0.25;
         self.anomaly_y = h * 0.5;
-        self.anomaly_vx = 2.4;
-        self.anomaly_vy = 1.2;
+        self.anomaly_vx = 2.4 * sf;
+        self.anomaly_vy = 1.2 * sf;
         self.tick = 0;
         let _ = MOD_TACHYON;
         AdResult::NoError
@@ -104,6 +112,7 @@ impl AdModule for TachyonModule {
         let h = ctx.surface.height;
         let wf = w as f32;
         let hf = h as f32;
+        let sf = self.scale_f;
 
         // Soft phosphor decay so tachyon particle arcs shimmer cleanly
         let dst = ctx.surface.pixels_mut();
@@ -115,32 +124,39 @@ impl AdModule for TachyonModule {
             *px = (r << 16) | (g << 8) | b;
         }
 
-        // Move invisible cloaked Romulan disturbance wave smoothly across field
+        // Move invisible cloaked Romulan disturbance wave smoothly across full widescreen field
+        let margin = 44.0 * sf;
         self.anomaly_x += self.anomaly_vx;
         self.anomaly_y += self.anomaly_vy;
-        if self.anomaly_x < 40.0 || self.anomaly_x > wf - 40.0 {
+        if self.anomaly_x < margin || self.anomaly_x > wf - margin {
             self.anomaly_vx = -self.anomaly_vx;
         }
-        if self.anomaly_y < 40.0 || self.anomaly_y > hf - 40.0 {
+        if self.anomaly_y < margin || self.anomaly_y > hf - margin {
             self.anomaly_vy = -self.anomaly_vy;
         }
 
-        // Subtle hexagonal / diagonal tachyon detection grid pulse
-        let grid_sp = (w.min(h) / 7).clamp(32, 84);
+        // Resolution-scaled pulsing tachyon detection grid
+        let grid_sp = (h / 7).clamp(36, 180);
         let pulse = ((self.tick as f32 * 0.08).sin() * 14.0 + 26.0) as u32;
         let grid_col = (pulse / 3) << 16 | (pulse << 8) | (pulse * 2).min(255);
+        let dot_step = (sf * 3.0).round().max(3.0) as usize;
         for gx in (0..w).step_by(grid_sp as usize) {
-            for y in (0..h).step_by(3) {
+            for y in (0..h).step_by(dot_step) {
                 put_px(ctx.surface, gx, y, grid_col);
             }
         }
         for gy in (0..h).step_by(grid_sp as usize) {
-            for x in (0..w).step_by(3) {
+            for x in (0..w).step_by(dot_step) {
                 put_px(ctx.surface, x, gy, grid_col);
             }
         }
 
-        // Update particles with gentle Lorentz-like swirling + Romulan cloak disruption!
+        // Scale disruption radius & link distance proportionally with monitor height!
+        let anom_r = hf * 0.16;
+        let anom_r2 = anom_r * anom_r;
+        let cloak_r2 = (hf * 0.21) * (hf * 0.21);
+        let max_spd = 4.4 * sf;
+
         let mut disrupted = false;
         let n = self.particles.len();
         for p in &mut self.particles {
@@ -148,19 +164,18 @@ impl AdModule for TachyonModule {
             let adx = p.x - self.anomaly_x;
             let ady = p.y - self.anomaly_y;
             let ad2 = adx * adx + ady * ady;
-            if ad2 < 5200.0 && ad2 > 16.0 {
+            if ad2 < anom_r2 && ad2 > 16.0 {
                 let d = ad2.sqrt();
-                p.vx += (adx / d) * 0.45;
-                p.vy += (ady / d) * 0.45;
+                p.vx += (adx / d) * 0.45 * sf;
+                p.vy += (ady / d) * 0.45 * sf;
                 disrupted = true;
             }
-            // Gentle harmonic swirl
-            p.vx += (p.phase.cos()) * 0.06 * p.charge;
-            p.vy += (p.phase.sin()) * 0.06 * p.charge;
+            p.vx += p.phase.cos() * 0.06 * sf * p.charge;
+            p.vy += p.phase.sin() * 0.06 * sf * p.charge;
             let spd = (p.vx * p.vx + p.vy * p.vy).sqrt();
-            if spd > 4.2 {
-                p.vx = (p.vx / spd) * 4.2;
-                p.vy = (p.vy / spd) * 4.2;
+            if spd > max_spd {
+                p.vx = (p.vx / spd) * max_spd;
+                p.vy = (p.vy / spd) * max_spd;
             }
             p.x += p.vx;
             p.y += p.vy;
@@ -180,12 +195,15 @@ impl AdModule for TachyonModule {
             }
         }
 
-        // Draw luminous tachyon field beams between nearby particles!
-        let max_link = (w.min(h) as f32 * 0.24).clamp(62.0, 140.0);
+        // Uncapped proportional link distance so 1080p/1440p/4K screens form a rich web!
+        let max_link = (hf * 0.27).max(70.0);
         let max_link_sq = max_link * max_link;
+        let base_thick = sf.round().clamp(1.0, 3.0) as i32;
+
         for i in 0..n {
             let pi = &self.particles[i];
-            let near_cloak = (pi.x - self.anomaly_x).powi(2) + (pi.y - self.anomaly_y).powi(2) < 7500.0;
+            let near_cloak =
+                (pi.x - self.anomaly_x).powi(2) + (pi.y - self.anomaly_y).powi(2) < cloak_r2;
             for j in (i + 1)..n {
                 let pj = &self.particles[j];
                 let dx = pj.x - pi.x;
@@ -194,23 +212,25 @@ impl AdModule for TachyonModule {
                 if d2 < max_link_sq {
                     let intensity = 1.0 - (d2.sqrt() / max_link);
                     let col = if near_cloak {
-                        // Romulan cloak interference flare: emerald-gold!
                         let r = (120.0 + intensity * 135.0) as u32;
                         let g = (190.0 + intensity * 65.0) as u32;
                         let b = (40.0 + intensity * 80.0) as u32;
                         (r << 16) | (g << 8) | b
                     } else if pi.charge * pj.charge > 0.0 {
-                        // High-energy cyan-blue tachyon beam
                         let r = (30.0 + intensity * 110.0) as u32;
                         let g = (140.0 + intensity * 115.0) as u32;
                         let b = (210.0 + intensity * 45.0) as u32;
                         (r << 16) | (g << 8) | b
                     } else {
-                        // Sub-space magenta-amber resonance
                         let r = (170.0 + intensity * 85.0) as u32;
                         let g = (70.0 + intensity * 120.0) as u32;
                         let b = (180.0 + intensity * 75.0) as u32;
                         (r << 16) | (g << 8) | b
+                    };
+                    let thick = if intensity > 0.62 {
+                        base_thick + 1
+                    } else {
+                        base_thick
                     };
                     draw_line_px(
                         ctx.surface,
@@ -219,17 +239,18 @@ impl AdModule for TachyonModule {
                         pj.x as i32,
                         pj.y as i32,
                         col,
-                        if intensity > 0.65 { 2 } else { 1 },
+                        thick,
                     );
                 }
             }
         }
 
-        // Draw glowing tachyon particle cores
+        // Draw resolution-scaled glowing tachyon particle cores
+        let core_r = (sf * 3.0).round().clamp(3.0, 7.0) as i32;
         for p in &self.particles {
             let core_col = if p.charge > 0.0 { 0x00A8_F4FF } else { 0x00FF_C868 };
-            fill_circle_px(ctx.surface, p.x as i32, p.y as i32, 3, core_col);
-            put_px(ctx.surface, p.x as i32, p.y as i32, 0x00FF_FFFF);
+            fill_circle_px(ctx.surface, p.x as i32, p.y as i32, core_r, core_col);
+            fill_circle_px(ctx.surface, p.x as i32, p.y as i32, (core_r / 2).max(1), 0x00FF_FFFF);
         }
 
         if disrupted && self.tick % 95 == 0 {

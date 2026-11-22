@@ -191,13 +191,14 @@ impl AdModule for RainStormModule {
             self.flash_active = false;
         }
 
-        // Update & draw drops
+        // Update & draw drops (line thickness scales cleanly on HD/4K displays)
+        let ps = (h / 480).clamp(1, 4);
         let (bl, bt, br, bb) = self.bounds;
         for i in 0..self.n_drops {
             // Erase previous streak with BLACK_PEN
             let d = self.drops[i];
             ctx.surface
-                .line(d.x, d.y, d.x + d.len_x, d.y + d.len_y, 1, rgb(0, 0, 0));
+                .line(d.x, d.y, d.x + d.len_x, d.y + d.len_y, ps, rgb(0, 0, 0));
 
             // Advance position
             self.drops[i].y += d.vel_y;
@@ -222,7 +223,7 @@ impl AdModule for RainStormModule {
                 cur.y,
                 cur.x + cur.len_x,
                 cur.y + cur.len_y,
-                1,
+                ps,
                 rgb(g, g, g),
             );
         }

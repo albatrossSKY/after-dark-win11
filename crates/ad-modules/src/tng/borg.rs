@@ -1,9 +1,10 @@
 //! *The Borg* — 1994 *Star Trek: The Next Generation* After Dark 3.0 Module.
 //!
-//! Borg drones (`OFst/OFtb #9000`, 277 frames) beam onto your desktop and
-//! methodically assimilate your screen into Borg circuitry (`RLEP #9001`, 49
-//! authentic `32x32` Borg hull/circuit tiles!) while Locutus speaks
-//! "I am Locutus of Borg" / "Resistance is futile" with TNG Suspense MIDI!
+//! Borg drones (`OFst/OFtb #9000`, filtered cleanly to full walking/scanning
+//! drone frames so they never glitch into `32x32` tile frames!) beam directly
+//! onto your real Windows desktop and assimilate contiguous Borg Collective
+//! circuitry clusters (`RLEP #9001`, 49 authentic `32x32` Borg hull tiles)
+//! scaled proportionally for modern HD/4K monitors while Locutus broadcasts!
 
 use ad_sdk::{AdContext, AdControl, AdMetadata, AdModule, AdResult};
 
@@ -20,7 +21,7 @@ struct BorgDrone {
     y: f32,
     vx: f32,
     vy: f32,
-    frame_idx: usize,
+    frame_pos: usize,
     beam_in: usize,
     laser_ticks: usize,
     assimilate_cooldown: usize,
@@ -35,19 +36,22 @@ const BORG_VOICES: &[i16] = &[
 
 pub struct TheBorgModule {
     anim: Option<CompoundAnim>,
+    drone_frames: Vec<usize>, // strictly full Borg drone poses (h >= 96), excluding 32x32 tiles!
     tiles: RlepBank,
     saved_bg: Vec<u32>,
     canvas_buf: Vec<u32>,
     clear_screen: bool,
     drones: Vec<BorgDrone>,
     tick: usize,
-    scale: i32,
+    scale_f: f32,
+    tile_scale: i32,
 }
 
 impl TheBorgModule {
     pub fn new() -> Self {
         Self {
             anim: None,
+            drone_frames: Vec::new(),
             tiles: RlepBank {
                 frames: Vec::new(),
                 palette: Vec::new(),
@@ -57,7 +61,8 @@ impl TheBorgModule {
             clear_screen: false,
             drones: Vec::new(),
             tick: 0,
-            scale: 1,
+            scale_f: 1.0,
+            tile_scale: 1,
         }
     }
 
@@ -106,33 +111,63 @@ impl TheBorgModule {
         }
     }
 
+    fn ensure_loaded(&mut self) {
+        if self.anim.is_some() {
+            return;
+        }
+        let anim = load_anim(MOD_BORG, 9000);
+        // Filter strictly to full Borg drone character frames (height >= 96, index < 226)
+        // so drones never glitch into standalone 32x32 Borg tiles (frames 226..276)!
+        self.drone_frames = anim
+            .frames
+            .iter()
+            .enumerate()
+            .take(226)
+            .filter(|(_, cf)| (cf.bottom - cf.top) >= 96 && !cf.parts.is_empty())
+            .map(|(i, _)| i)
+            .collect();
+        if self.drone_frames.is_empty() && !anim.frames.is_empty() {
+            self.drone_frames.push(0);
+        }
+        self.anim = Some(anim);
+        self.tiles = load_rlep(MOD_BORG, 9001);
+    }
+
     fn stamp_borg_tile(&mut self, w: i32, h: i32, gx: i32, gy: i32, rng: &mut ad_sdk::MsvcRand) {
         if self.tiles.frames.is_empty() || self.canvas_buf.len() != (w * h) as usize {
             return;
         }
-        let ti = rng.rand_mod(self.tiles.frames.len() as i32) as usize;
-        let tile = &self.tiles.frames[ti];
-        let s = self.scale;
-        let sx0 = (gx / (32 * s)) * (32 * s);
-        let sy0 = (gy / (32 * s)) * (32 * s);
-        for ty in 0..tile.h {
-            let srow = (ty * tile.w) as usize;
-            for tx in 0..tile.w {
-                let c = tile.pixels[srow + tx as usize];
-                if c == 0 {
-                    continue;
-                }
-                let rgb = c & 0x00FF_FFFF;
-                for oy in 0..s {
-                    let py = sy0 + ty * s + oy;
-                    if py < 0 || py >= h {
+        let s = self.tile_scale;
+        let step = 32 * s;
+        let base_cx = (gx / step) * step;
+        let base_cy = (gy / step) * step;
+        // Stamp primary tile + occasional adjacent neighbor so Borg circuitry grows in organic clusters!
+        let offsets = [(0, 0), (step, 0), (0, step)];
+        let count = if rng.rand_mod(3) == 0 { 2 } else { 1 };
+        for &(ox_t, oy_t) in offsets.iter().take(count) {
+            let sx0 = base_cx + ox_t;
+            let sy0 = base_cy + oy_t;
+            let ti = rng.rand_mod(self.tiles.frames.len() as i32) as usize;
+            let tile = &self.tiles.frames[ti];
+            for ty in 0..tile.h {
+                let srow = (ty * tile.w) as usize;
+                for tx in 0..tile.w {
+                    let c = tile.pixels[srow + tx as usize];
+                    if c == 0 {
                         continue;
                     }
-                    let drow = (py * w) as usize;
-                    for ox in 0..s {
-                        let px = sx0 + tx * s + ox;
-                        if px >= 0 && px < w {
-                            self.canvas_buf[drow + px as usize] = rgb;
+                    let rgb = c & 0x00FF_FFFF;
+                    for oy in 0..s {
+                        let py = sy0 + ty * s + oy;
+                        if py < 0 || py >= h {
+                            continue;
+                        }
+                        let drow = (py * w) as usize;
+                        for ox in 0..s {
+                            let px = sx0 + tx * s + ox;
+                            if px >= 0 && px < w {
+                                self.canvas_buf[drow + px as usize] = rgb;
+                            }
                         }
                     }
                 }
@@ -153,19 +188,18 @@ impl AdModule for TheBorgModule {
     }
 
     fn do_initialize(&mut self, ctx: &mut AdContext<'_>) -> AdResult {
-        if self.anim.is_none() {
-            self.anim = Some(load_anim(MOD_BORG, 9000));
-            self.tiles = load_rlep(MOD_BORG, 9001);
-        }
+        self.ensure_loaded();
         self.saved_bg = ctx.surface.pixels().to_vec();
         let pop_raw = ctx.module.raw_control_value[0].clamp(0, 100);
         let num_drones = (1 + pop_raw / 13).clamp(1, 8) as usize;
         self.clear_screen = ctx.module.raw_control_value[2] != 0;
-        self.scale = if ctx.surface.width >= 1000 { 2 } else { 1 };
-        self.tick = 0;
 
         let w = ctx.surface.width;
         let h = ctx.surface.height;
+        self.scale_f = (h as f32 / 480.0).clamp(1.0, 3.2);
+        self.tile_scale = ((h + 240) / 540).clamp(1, 3);
+        self.tick = 0;
+
         self.canvas_buf.resize((w * h) as usize, 0);
         if self.clear_screen || self.saved_bg.len() != self.canvas_buf.len() {
             self.canvas_buf.fill(0x0006_0C08);
@@ -173,20 +207,21 @@ impl AdModule for TheBorgModule {
             self.canvas_buf.copy_from_slice(&self.saved_bg);
         }
 
+        let nf = self.drone_frames.len().max(1);
         self.drones.clear();
         for i in 0..num_drones {
-            let x = (40 + ctx.rng.rand_mod((w - 80).max(20))) as f32;
-            let y = (80 + ctx.rng.rand_mod((h - 100).max(20))) as f32;
+            let x = (w / 10 + ctx.rng.rand_mod((w * 8 / 10).max(20))) as f32;
+            let y = (h / 5 + ctx.rng.rand_mod((h * 7 / 10).max(20))) as f32;
             let dir = if (i & 1) == 0 { 1.0 } else { -1.0 };
             self.drones.push(BorgDrone {
                 x,
                 y,
-                vx: dir * (1.8 + (i as f32) * 0.25) * self.scale as f32,
-                vy: ((ctx.rng.rand_mod(5) - 2) as f32) * 0.45 * self.scale as f32,
-                frame_idx: (i * 37) % 270,
+                vx: dir * (1.8 + (i as f32) * 0.22) * self.scale_f,
+                vy: ((ctx.rng.rand_mod(5) - 2) as f32) * 0.42 * self.scale_f,
+                frame_pos: (i * 29) % nf,
                 beam_in: 14 + i * 4,
                 laser_ticks: 0,
-                assimilate_cooldown: 10 + i * 5,
+                assimilate_cooldown: 10 + i * 4,
             });
         }
 
@@ -207,10 +242,10 @@ impl AdModule for TheBorgModule {
         self.tick = self.tick.wrapping_add(1);
         let w = ctx.surface.width;
         let h = ctx.surface.height;
-        let s = self.scale;
+        let sf = self.scale_f;
         let pack = tng_pack();
 
-        let n_frames = self.anim.as_ref().map(|a| a.frames.len()).unwrap_or(1).max(1);
+        let nf = self.drone_frames.len().max(1);
         let mut to_assimilate = Vec::new();
 
         for d in &mut self.drones {
@@ -221,21 +256,22 @@ impl AdModule for TheBorgModule {
                 }
                 continue;
             }
-            d.frame_idx = (d.frame_idx + 1) % n_frames;
+            d.frame_pos = (d.frame_pos + 1) % nf;
             d.x += d.vx;
             d.y += d.vy;
-            if d.x < 30.0 * s as f32 {
-                d.x = 30.0 * s as f32;
+            let margin_x = 34.0 * sf;
+            if d.x < margin_x {
+                d.x = margin_x;
                 d.vx = d.vx.abs();
-            } else if d.x > (w - 30 * s) as f32 {
-                d.x = (w - 30 * s) as f32;
+            } else if d.x > w as f32 - margin_x {
+                d.x = w as f32 - margin_x;
                 d.vx = -d.vx.abs();
             }
-            if d.y < 90.0 * s as f32 {
-                d.y = 90.0 * s as f32;
+            if d.y < 116.0 * sf {
+                d.y = 116.0 * sf;
                 d.vy = d.vy.abs();
-            } else if d.y > (h - 12 * s) as f32 {
-                d.y = (h - 12 * s) as f32;
+            } else if d.y > h as f32 - 12.0 * sf {
+                d.y = h as f32 - 12.0 * sf;
                 d.vy = -d.vy.abs();
             }
 
@@ -245,10 +281,10 @@ impl AdModule for TheBorgModule {
             if d.assimilate_cooldown > 0 {
                 d.assimilate_cooldown -= 1;
             } else {
-                d.assimilate_cooldown = 16 + ctx.rng.rand_mod(18) as usize;
-                d.laser_ticks = 8;
-                let tx = d.x as i32 + if d.vx >= 0.0 { 32 * s } else { -32 * s };
-                let ty = d.y as i32 - 52 * s;
+                d.assimilate_cooldown = 14 + ctx.rng.rand_mod(16) as usize;
+                d.laser_ticks = 9;
+                let tx = d.x as i32 + ((if d.vx >= 0.0 { 36.0 } else { -36.0 }) * sf) as i32;
+                let ty = d.y as i32 - (56.0 * sf) as i32;
                 to_assimilate.push((tx, ty));
             }
         }
@@ -271,21 +307,30 @@ impl AdModule for TheBorgModule {
                 let cx = d.x as i32;
                 let by = d.y as i32;
                 if d.beam_in > 0 {
-                    // Emerald Borg transporter beam shimmer!
-                    for _k in 0..18 {
-                        let rx = cx + ctx.rng.rand_mod(38 * s) - 19 * s;
-                        let ry = by - ctx.rng.rand_mod(105 * s);
-                        draw_line_px(ctx.surface, rx, ry, rx, ry + 6 * s, 0x0048_FF78, s);
+                    let thick = sf.round().max(1.0) as i32;
+                    for _k in 0..20 {
+                        let rx = cx + ctx.rng.rand_mod((42.0 * sf).max(12.0) as i32) - (21.0 * sf) as i32;
+                        let ry = by - ctx.rng.rand_mod((112.0 * sf).max(32.0) as i32);
+                        draw_line_px(ctx.surface, rx, ry, rx, ry + (7.0 * sf) as i32, 0x0048_FF78, thick);
                     }
                 } else {
-                    anim.draw_anchored_bottom(ctx.surface, d.frame_idx, cx, by, s, d.vx < 0.0);
-                    // Green Borg assimilation scanner beam!
+                    let fi = self.drone_frames[d.frame_pos % self.drone_frames.len()];
+                    anim.draw_anchored_bottom_f(ctx.surface, fi, cx, by, sf, d.vx < 0.0, true, false);
+                    // Glowing green Borg assimilation scanner laser!
                     if d.laser_ticks > 0 {
-                        let ex = cx + if d.vx >= 0.0 { 8 * s } else { -8 * s };
-                        let ey = by - 94 * s;
-                        let tx = cx + if d.vx >= 0.0 { 44 * s } else { -44 * s };
-                        let ty = by - 54 * s;
-                        draw_line_px(ctx.surface, ex, ey, tx, ty, 0x0030_FF58, (2 * s).max(2));
+                        let ex = cx + ((if d.vx >= 0.0 { 8.0 } else { -8.0 }) * sf) as i32;
+                        let ey = by - (96.0 * sf) as i32;
+                        let tx = cx + ((if d.vx >= 0.0 { 48.0 } else { -48.0 }) * sf) as i32;
+                        let ty = by - (54.0 * sf) as i32;
+                        draw_line_px(
+                            ctx.surface,
+                            ex,
+                            ey,
+                            tx,
+                            ty,
+                            0x0030_FF58,
+                            (sf * 2.2).round().max(2.0) as i32,
+                        );
                     }
                 }
             }

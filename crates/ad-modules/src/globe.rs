@@ -138,17 +138,20 @@ impl GlobeModule {
             }
         };
 
-        // Clamp globe diameter cleanly so even small preview windows render smoothly
-        let max_diam = (ctx.module.rgn_width.min(ctx.module.rgn_height) - 8).max(32);
-        let map_h = (bmp.height.min(max_diam)).max(32) as usize;
-        let map_w = bmp.width.max(32) as usize;
+        // Scale globe proportionally for modern HD/4K screens (1:1 at 480p, larger crisp sphere at 720p/1080p/4K!)
+        let sf = (ctx.module.rgn_height as f32 / 480.0).clamp(1.0, 4.0);
+        let max_diam = ((ctx.module.rgn_width.min(ctx.module.rgn_height) * 80) / 100).max(32);
+        let target_h = ((bmp.height as f32 * sf).round() as i32).min(max_diam).max(32);
+        let scale_ratio = target_h as f32 / bmp.height.max(1) as f32;
+        let map_h = (target_h & !1).max(32) as usize; // even diameter
+        let map_w = ((bmp.width as f32 * scale_ratio).round() as i32).max(32) as usize;
         let radius = (map_h / 2).max(16);
         let diam = radius * 2;
 
         let Some(mut src_surf) = AdSurface::new(map_w as i32, map_h as i32) else {
             return;
         };
-        if map_h as i32 == bmp.height {
+        if map_w as i32 == bmp.width && map_h as i32 == bmp.height {
             src_surf.bit_blt_bitmap(0, 0, map_w as i32, map_h as i32, &bmp, 0, 0, ROP_SRCCOPY);
         } else {
             src_surf.stretch_blt_bitmap(

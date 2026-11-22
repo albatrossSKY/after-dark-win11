@@ -245,15 +245,17 @@ impl WarpModule {
     }
 
     fn step_frame(&mut self, ctx: &mut AdContext<'_>) {
-        // 1:0481..1:06EB
+        // 1:0481..1:06EB (with HD/4K dot-size scaling so stars remain crisp on 1080p/4K displays)
         let dz = self.speed >> 3;
+        let ps = (ctx.module.rgn_height / 480).clamp(1, 4);
         for i in 0..self.num_stars {
             if self.do_erase {
                 let st = self.stars[i];
-                if st.size == 1 {
+                let dsz = st.size * ps;
+                if dsz <= 1 {
                     ctx.surface.set_pixel(st.sx, st.sy, 0);
                 } else {
-                    ctx.surface.pat_blt_black(st.sx, st.sy, 2, 2);
+                    ctx.surface.pat_blt_black(st.sx, st.sy, dsz, dsz);
                 }
             }
 
@@ -303,10 +305,11 @@ impl WarpModule {
 
             if self.do_draw {
                 let st = self.stars[i];
-                if st.size == 2 {
-                    ctx.surface.pat_blt_rgb(st.sx, st.sy, 2, 2, st.color);
-                } else {
+                let dsz = st.size * ps;
+                if dsz <= 1 {
                     ctx.surface.set_pixel(st.sx, st.sy, st.color);
+                } else {
+                    ctx.surface.pat_blt_rgb(st.sx, st.sy, dsz, dsz, st.color);
                 }
             }
         }

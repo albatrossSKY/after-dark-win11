@@ -1,20 +1,17 @@
 //! "Cartoons 101" — Classic 1995 *Looney Tunes* After Dark 3.0 module.
 //!
-//! Demonstrates the 21 fundamental laws of Looney Tunes Cartoon Physics
-//! (`STR# #7050..#7250`) with Wile E. Coyote and the Road Runner (`RLEP #7000..#7005`,
-//! 1,324 compound animation frames in `OFst #7000`), optional physics blueprint
-//! `Grid`, typewriter lesson captions (`RLEP #7500`), and digitized Road Runner
-//! *"Beep! Beep!"* / typewriter / 18-wheeler truck sound effects.
+//! Full-widescreen Cartoon Physics Blueprint lecture board demonstrating all 21
+//! laws of Looney Tunes Cartoon Physics (`STR# #7050..#7250`) with smoothly
+//! scaled Wile E. Coyote & Road Runner (`OFst #7000`), toggleable blueprint
+//! `Grid`, scaled typewriter lesson captions (`RLEP #7500`), and SFX!
 
 use ad_sdk::{AdContext, AdControl, AdMetadata, AdModule, AdResult};
 
 use crate::looney::{
-    CARTOONS101_SFX, MOD_CARTOONS_101, draw_looney_text, fill_box_px, load_anim, load_rlep,
-    looney_pack, outline_box_px, wrap_looney_text,
+    CARTOONS101_SFX, MOD_CARTOONS_101, advance_filtered_range, draw_looney_text_f, fill_box_px,
+    load_anim, load_rlep, looney_pack, outline_box_px, wrap_looney_text_f,
 };
-use crate::simpsons::{
-    CompoundAnim, KIND_STR_LIST, RlepBank, draw_line_px, parse_str_list,
-};
+use crate::simpsons::{CompoundAnim, KIND_STR_LIST, RlepBank, draw_line_px, parse_str_list};
 
 struct CartoonLesson {
     heading: String,
@@ -132,28 +129,31 @@ impl AdModule for Cartoons101Module {
 
         let w = ctx.surface.width;
         let h = ctx.surface.height;
+        let sf = (h as f32 / 480.0).clamp(0.95, 3.6);
         ctx.surface.pixels_mut().fill(0x000C_1830);
 
         if self.show_grid {
+            let step = (32.0 * sf).round().max(24.0) as i32;
+            let major = step * 5;
             let mut gx = 0;
             while gx < w {
-                let col = if gx % 160 == 0 {
-                    0x001E_3A68
+                let col = if gx % major == 0 {
+                    0x0022_4478
                 } else {
                     0x0013_2646
                 };
                 draw_line_px(ctx.surface, gx, 0, gx, h - 1, col, 1);
-                gx += 32;
+                gx += step;
             }
             let mut gy = 0;
             while gy < h {
-                let col = if gy % 160 == 0 {
-                    0x001E_3A68
+                let col = if gy % major == 0 {
+                    0x0022_4478
                 } else {
                     0x0013_2646
                 };
                 draw_line_px(ctx.surface, 0, gy, w - 1, gy, col, 1);
-                gy += 32;
+                gy += step;
             }
         }
 
@@ -162,82 +162,126 @@ impl AdModule for Cartoons101Module {
         };
 
         let n_frames = anim.frames.len().saturating_sub(1);
-        self.frame_idx = crate::looney::advance_filtered_range(
-            anim,
-            self.frame_idx,
-            1,
-            n_frames,
-            36,
-            48,
-            230,
-            240,
-        );
+        self.frame_idx =
+            advance_filtered_range(anim, self.frame_idx, 1, n_frames, 36, 48, 230, 240);
         if self.tick % 90 == 0 && !self.lessons.is_empty() {
             self.cur_lesson = (self.cur_lesson + 1) % self.lessons.len();
-            let sfx = CARTOONS101_SFX[(self.cur_lesson) % CARTOONS101_SFX.len()];
+            let sfx = CARTOONS101_SFX[self.cur_lesson % CARTOONS101_SFX.len()];
             looney_pack().play_voice(ctx.sound, ctx.system.sound_enabled, sfx);
         }
 
-        // Top Cartoon Physics Lesson Chalkboard / Textbook Card
-        let card_w = (w - 64).min(560);
-        let card_x = (w - card_w) / 2;
-        let card_y = 20;
-        let card_h = 138;
+        // Full-widescreen Cartoon Physics Lesson Chalkboard Card at top
+        let pad = (h / 24).clamp(12, 36);
+        let card_x = pad;
+        let card_w = (w - pad * 2).max(240);
+        let card_y = pad;
+        let card_h = (h * 30 / 100).max(115);
+        let border = (sf * 2.0).round().max(2.0) as i32;
         fill_box_px(ctx.surface, card_x, card_y, card_w, card_h, 0x0008_1020);
-        outline_box_px(ctx.surface, card_x, card_y, card_w, card_h, 0x0048_88D8, 2);
+        outline_box_px(ctx.surface, card_x, card_y, card_w, card_h, 0x0048_88D8, border);
+
+        let text_sf = (sf * 1.15).clamp(1.0, 3.6);
+        let line_h = (19.0 * text_sf).round() as i32;
+        let inner_pad = (16.0 * sf).round() as i32;
 
         if let Some(lesson) = self.lessons.get(self.cur_lesson) {
             let header = format!("{}: {}", lesson.heading, lesson.title);
-            draw_looney_text(
+            draw_looney_text_f(
                 ctx.surface,
                 font,
                 &header,
-                card_x + 14,
-                card_y + 12,
+                card_x + inner_pad,
+                card_y + (12.0 * sf).round() as i32,
                 Some(0xFFE0_40),
-                1,
+                text_sf,
             );
 
-            let lines = wrap_looney_text(font, &lesson.body, card_w - 28, 1);
-            let mut ty = card_y + 36;
+            let lines = wrap_looney_text_f(font, &lesson.body, card_w - inner_pad * 2, text_sf);
+            let mut ty = card_y + (12.0 * sf).round() as i32 + line_h + 6;
             for line in lines.iter().take(3) {
-                draw_looney_text(ctx.surface, font, line, card_x + 14, ty, Some(0xFFFF_FF), 1);
-                ty += 18;
+                if ty + line_h > card_y + card_h - 6 {
+                    break;
+                }
+                draw_looney_text_f(
+                    ctx.surface,
+                    font,
+                    line,
+                    card_x + inner_pad,
+                    ty,
+                    Some(0xFFFF_FF),
+                    text_sf,
+                );
+                ty += line_h;
             }
             if let Some(cor) = &lesson.corollary {
                 ty += 4;
-                let clines = wrap_looney_text(font, cor, card_w - 28, 1);
+                let clines = wrap_looney_text_f(font, cor, card_w - inner_pad * 2, text_sf);
                 for line in clines.iter().take(2) {
-                    draw_looney_text(ctx.surface, font, line, card_x + 14, ty, Some(0x80D8_FF), 1);
-                    ty += 17;
+                    if ty + line_h > card_y + card_h - 4 {
+                        break;
+                    }
+                    draw_looney_text_f(
+                        ctx.surface,
+                        font,
+                        line,
+                        card_x + inner_pad,
+                        ty,
+                        Some(0x80D8_FF),
+                        text_sf,
+                    );
+                    ty += line_h;
                 }
             }
         }
 
-        // Demonstration Stage below the lesson card
-        let stage_y = card_y + card_h + 18;
-        let stage_h = (h - stage_y - 20).max(200);
+        // Full-widescreen Demonstration Stage cleanly below the lesson card
+        let stage_y = card_y + card_h + (pad * 3 / 4);
+        let stage_h = (h - stage_y - pad).max(160);
         fill_box_px(ctx.surface, card_x, stage_y, card_w, stage_h, 0x0010_203A);
-        outline_box_px(ctx.surface, card_x, stage_y, card_w, stage_h, 0x0030_60A0, 2);
+        outline_box_px(ctx.surface, card_x, stage_y, card_w, stage_h, 0x0030_60A0, border);
 
-        let floor_y = stage_y + stage_h - 36;
-        fill_box_px(ctx.surface, card_x + 2, floor_y, card_w - 4, 34, 0x008A_4B22);
+        let floor_h = (stage_h / 7).clamp(24, 68);
+        let floor_y = stage_y + stage_h - floor_h;
+        fill_box_px(ctx.surface, card_x + border, floor_y, card_w - border * 2, floor_h - border, 0x008A_4B22);
         draw_line_px(
             ctx.surface,
-            card_x + 2,
+            card_x + border,
             floor_y,
-            card_x + card_w - 3,
+            card_x + card_w - border,
             floor_y,
             0x00D8_8844,
-            2,
+            border,
         );
 
-        anim.draw_anchored_bottom(ctx.surface, self.frame_idx, w / 2 - 70, floor_y + 4, 1, false);
+        let actor_sf = ((stage_h as f32 * 0.62) / 160.0).clamp(1.0, 3.8);
+        anim.draw_anchored_bottom_f(
+            ctx.surface,
+            self.frame_idx,
+            w / 2 - (card_w / 6),
+            floor_y + 4,
+            actor_sf,
+            false,
+            true,
+            false,
+        );
         let raw_comp = (self.frame_idx + n_frames / 3) % n_frames.max(1);
-        let comp_idx =
-            crate::looney::advance_filtered_range(anim, raw_comp, 1, n_frames, 36, 48, 230, 240);
-        anim.draw_anchored_bottom(ctx.surface, comp_idx, w / 2 + 95, floor_y + 4, 1, false);
+        let comp_idx = advance_filtered_range(anim, raw_comp, 1, n_frames, 36, 48, 230, 240);
+        anim.draw_anchored_bottom_f(
+            ctx.surface,
+            comp_idx,
+            w / 2 + (card_w / 6),
+            floor_y + 4,
+            actor_sf,
+            false,
+            true,
+            false,
+        );
 
+        AdResult::NoError
+    }
+
+    fn do_close(&mut self, ctx: &mut AdContext<'_>) -> AdResult {
+        ctx.sound.stop_all();
         AdResult::NoError
     }
 }

@@ -64,6 +64,8 @@ pub struct NocturneModule {
     slots: [EyeSlot; 10],
     last_spawn_tick: i64,
     spawn_delay_ms: i64,
+    eye_w: i32,
+    eye_h: i32,
 }
 
 impl NocturneModule {
@@ -73,6 +75,8 @@ impl NocturneModule {
             slots: [EyeSlot::default(); 10],
             last_spawn_tick: 0,
             spawn_delay_ms: 0,
+            eye_w: 32,
+            eye_h: 16,
         }
     }
 
@@ -132,14 +136,16 @@ impl NocturneModule {
     fn spawn_eye(&mut self, idx: usize, ctx: &mut AdContext<'_>) {
         let w = ctx.module.rgn_width;
         let h = ctx.module.rgn_height;
-        if w <= 32 || h <= 16 {
+        let ew = self.eye_w;
+        let eh = self.eye_h;
+        if w <= ew || h <= eh {
             return;
         }
         // Exact original RandRange order: top (Y) first, then left (X)
-        let top = Self::rand_range(ctx.rng, 0, h - 16);
-        let left = Self::rand_range(ctx.rng, 0, w - 32);
-        let bottom = top + 16;
-        let right = left + 32;
+        let top = Self::rand_range(ctx.rng, 0, h - eh);
+        let left = Self::rand_range(ctx.rng, 0, w - ew);
+        let bottom = top + eh;
+        let right = left + ew;
 
         if self.overlaps_any(left, top, right, bottom) {
             return;
@@ -178,20 +184,38 @@ impl NocturneModule {
             ctx.surface
                 .fill_rect_rgb(eye.left, eye.top, eye.right, eye.bottom, rgb(0, 0, 0));
         } else if let Some(bmp) = self.eyes_bmp.as_ref() {
-            // Exact Win16 mono->color BitBlt with DSPDxax (0x00E20746) & default TextColor=Black / BkColor=White
+            // Exact Win16 mono->color blit with DSPDxax (0x00E20746), scaled proportionally for HD/4K
             ctx.surface.set_text_color(rgb(0, 0, 0));
             ctx.surface.set_bk_color(rgb(255, 255, 255));
-            ctx.surface.bit_blt_bitmap_with_brush(
-                eye.left,
-                eye.top,
-                32,
-                16,
-                bmp,
-                (eye.frame as i32) << 5,
-                (eye.eye_type as i32) << 4,
-                eye.color,
-                ROP_DSPDXAX,
-            );
+            let ew = eye.right - eye.left;
+            let eh = eye.bottom - eye.top;
+            if ew == 32 && eh == 16 {
+                ctx.surface.bit_blt_bitmap_with_brush(
+                    eye.left,
+                    eye.top,
+                    32,
+                    16,
+                    bmp,
+                    (eye.frame as i32) << 5,
+                    (eye.eye_type as i32) << 4,
+                    eye.color,
+                    ROP_DSPDXAX,
+                );
+            } else {
+                ctx.surface.stretch_blt_bitmap_with_brush(
+                    eye.left,
+                    eye.top,
+                    ew,
+                    eh,
+                    bmp,
+                    (eye.frame as i32) << 5,
+                    (eye.eye_type as i32) << 4,
+                    32,
+                    16,
+                    eye.color,
+                    ROP_DSPDXAX,
+                );
+            }
         }
     }
 
@@ -219,6 +243,9 @@ impl AdModule for NocturneModule {
             slot.free = true;
             slot.needs_draw = false;
         }
+        let sf = (ctx.module.rgn_height as f32 / 360.0).clamp(1.0, 4.5);
+        self.eye_w = (32.0 * sf).round().max(32.0) as i32;
+        self.eye_h = (16.0 * sf).round().max(16.0) as i32;
         self.eyes_bmp = AdBitmap::from_bmp_bytes(BMP_EYES);
         if self.eyes_bmp.is_none() {
             return AdResult::MemError;

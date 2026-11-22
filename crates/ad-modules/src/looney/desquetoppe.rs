@@ -1,10 +1,9 @@
 //! "Desquetoppe D'Amour" — Classic 1995 *Looney Tunes* After Dark 3.0 module.
 //!
 //! *"Ah, l'amour! Le toujours! Le computeur!"* Pepé Le Pew bounds across your
-//! Windows desktop (`OFst #8000`, 447 compound frames across `RLEP #8000..#8004`)
-//! pursuing Penelope Pussycat through a springtime flower garden while playing
-//! *Desquetoppe D'Amour* (`SONG_DESQUETOPPE` `#40`) or *La Marseillaise* (`#60`)
-//! and Pepé's digitized romantic lines (`PEPE_VOICES`).
+//! real Windows desktop (`OFst #8000`) pursuing Penelope Pussycat with smoothly
+//! scaled HD/4K sprites and rising pink hearts while playing *Desquetoppe
+//! D'Amour* (`#40`) or *La Marseillaise* (`#60`) and Pepé's voice clips.
 
 use ad_sdk::{AdContext, AdControl, AdMetadata, AdModule, AdResult};
 
@@ -38,7 +37,7 @@ impl DesquetoppeModule {
     pub fn new() -> Self {
         Self {
             clear_first: false,
-            music_raw: 16,
+            music_raw: 25,
             saved_bg: Vec::new(),
             anim: None,
             pepe_frame: 4,
@@ -64,7 +63,7 @@ impl DesquetoppeModule {
                 },
                 AdControl::LabeledSlider {
                     title: "Music:".to_string(),
-                    default_raw: 16,
+                    default_raw: 25,
                     labels: vec![
                         "Never".into(),
                         "Once".into(),
@@ -107,20 +106,25 @@ impl AdModule for DesquetoppeModule {
         self.tick = 0;
         self.pepe_frame = 4;
         self.cat_frame = 215;
-        self.pepe_x = 150.0;
-        self.cat_x = 380.0;
+
+        let w = ctx.surface.width.max(320);
+        let h = ctx.surface.height.max(240);
+        let sf = (h as f32 / 480.0).clamp(1.0, 3.2);
+        self.pepe_x = w as f32 * 0.25;
+        self.cat_x = w as f32 * 0.58;
         self.hearts.clear();
-        for i in 0..12 {
+        let n_hearts = ((w / 55).clamp(12, 32)) as usize;
+        for i in 0..n_hearts {
             self.hearts.push(HeartParticle {
-                x: (80 + i * 46) as f32,
-                y: (120 + (i * 29) % 240) as f32,
-                vy: -0.9 - (i % 3) as f32 * 0.35,
+                x: ((i as f32 + 0.5) / n_hearts as f32) * w as f32,
+                y: (h as f32 * 0.15) + ((i * 53) as f32 % (h as f32 * 0.75).max(60.0)),
+                vy: (-1.0 - (i % 3) as f32 * 0.4) * sf,
                 phase: i as f32 * 0.7,
             });
         }
         restore_or_clear(ctx.surface, &self.saved_bg, self.clear_first, 0x001E_1632);
 
-        if let Some(loops) = music_loops_from_slider(self.music_raw.max(25)) {
+        if let Some(loops) = music_loops_from_slider(self.music_raw) {
             let song = if ctx.rng.rand_mod(2) == 0 {
                 SONG_DESQUETOPPE
             } else {
@@ -143,55 +147,63 @@ impl AdModule for DesquetoppeModule {
 
         let w = ctx.surface.width;
         let h = ctx.surface.height;
-        // Restore the user's real Windows desktop (or solid romantic twilight if Clear Screen First is checked)
+        let sf = (h as f32 / 480.0).clamp(1.0, 3.2);
         restore_or_clear(ctx.surface, &self.saved_bg, self.clear_first, 0x001E_1632);
 
         let Some(anim) = &self.anim else {
             return AdResult::NoError;
         };
 
-        // 1. Floating pink hearts rising across the user's real Windows desktop
+        // 1. Floating pink hearts scaled cleanly across the entire Windows desktop
+        let hr = (4.0 * sf).round().max(4.0) as i32;
+        let ho = (3.0 * sf).round().max(3.0) as i32;
         for hp in &mut self.hearts {
             hp.y += hp.vy;
             hp.phase += 0.08;
-            let hx = (hp.x + hp.phase.sin() * 14.0) as i32;
+            let hx = (hp.x + hp.phase.sin() * 16.0 * sf) as i32;
             let hy = hp.y as i32;
             if hp.y < 24.0 {
-                hp.y = (h - 32) as f32;
+                hp.y = (h - 24) as f32;
             }
-            fill_circle_px(ctx.surface, hx - 3, hy, 4, 0xFF60_98);
-            fill_circle_px(ctx.surface, hx + 3, hy, 4, 0xFF60_98);
-            fill_box_px(ctx.surface, hx - 4, hy + 1, 9, 5, 0xFF60_98);
+            fill_circle_px(ctx.surface, hx - ho, hy, hr, 0xFF60_98);
+            fill_circle_px(ctx.surface, hx + ho, hy, hr, 0xFF60_98);
+            fill_box_px(ctx.surface, hx - hr, hy + 1, hr * 2 + 1, hr + 1, 0xFF60_98);
         }
 
-        // 2. Advance Pepé Le Pew (`4..=130`) & Penelope Pussycat (`180..=446`), filtering out tiny sub-part frames
+        // 2. Smoothly scaled Pepé Le Pew (`4..=130`) & Penelope Pussycat (`180..=446`)
         self.pepe_frame = advance_filtered_range(anim, self.pepe_frame, 4, 130, 45, 55, 220, 220);
         self.cat_frame = advance_filtered_range(anim, self.cat_frame, 180, 446, 45, 50, 220, 220);
 
-        self.pepe_x += 2.2;
-        self.cat_x += 2.5;
-        if self.pepe_x > (w - 80) as f32 {
-            self.pepe_x = 80.0;
+        self.pepe_x += 2.4 * sf;
+        self.cat_x += 2.7 * sf;
+        let margin = 80.0 * sf;
+        if self.pepe_x > w as f32 - margin {
+            self.pepe_x = margin;
         }
-        if self.cat_x > (w - 60) as f32 {
-            self.cat_x = 120.0;
+        if self.cat_x > w as f32 - margin {
+            self.cat_x = margin * 1.4;
         }
 
-        let ground_y = h - 28;
-        anim.draw_anchored_bottom(
+        let ground_y = h - (24.0 * sf).round() as i32;
+        let char_sf = (sf * 1.35).clamp(1.1, 3.8);
+        anim.draw_anchored_bottom_f(
             ctx.surface,
             self.pepe_frame,
             self.pepe_x as i32,
             ground_y,
-            1,
+            char_sf,
+            false,
+            true,
             false,
         );
-        anim.draw_anchored_bottom(
+        anim.draw_anchored_bottom_f(
             ctx.surface,
             self.cat_frame,
             self.cat_x as i32,
-            ground_y - 16,
-            1,
+            ground_y - (14.0 * sf).round() as i32,
+            char_sf,
+            false,
+            true,
             false,
         );
 
@@ -200,6 +212,11 @@ impl AdModule for DesquetoppeModule {
             looney_pack().play_voice(ctx.sound, ctx.system.sound_enabled, vid);
         }
 
+        AdResult::NoError
+    }
+
+    fn do_close(&mut self, ctx: &mut AdContext<'_>) -> AdResult {
+        ctx.sound.stop_all();
         AdResult::NoError
     }
 }

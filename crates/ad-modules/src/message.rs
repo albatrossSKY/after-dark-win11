@@ -256,8 +256,9 @@ impl MessagesModule {
         self.speed_step = (speed_val / 15) + 1;
 
         let face = active.resolved_font_face();
-        // Win16 CreateFont positive height matches cell height; scale cleanly if needed
-        let font_h = active.point_size.clamp(12, 96);
+        // Scale font height proportionally for modern HD/4K screens (1:1 at 480p, crisp & legible at 1080p/4K!)
+        let sf = (ctx.module.rgn_height as f32 / 360.0).clamp(0.85, 4.5);
+        let font_h = ((active.point_size.clamp(12, 96) as f32) * sf).round().clamp(12.0, 240.0) as i32;
         let color = active.colorref();
 
         if move_mode == 2 {

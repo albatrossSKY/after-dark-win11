@@ -9,8 +9,8 @@ use ad_sdk::{AdContext, AdControl, AdMetadata, AdModule, AdResult};
 
 use super::{
     KIND_HSTR, LisaDrawing, MOD_HOW_TO_DRAW, RlepBank, SND_BART_DOIT, SND_CHALK_HIT1,
-    SND_HOMER_AWW, SND_WHOOSH, SimpsonsPack, SpriteFrame, draw_bitmap_text, draw_line_px,
-    draw_rect_outline_px, fill_circle_px, fill_rect_px, parse_str_list, wrap_bitmap_text,
+    SND_HOMER_AWW, SND_WHOOSH, SimpsonsPack, SpriteFrame, draw_bitmap_text_f, draw_line_px,
+    draw_rect_outline_px, fill_circle_px, fill_rect_px, parse_str_list, wrap_bitmap_text_f,
 };
 
 const CHAR_NAMES: [&str; 5] = ["HOMER", "MARGE", "BART", "LISA", "MAGGIE"];
@@ -137,10 +137,11 @@ impl HowToDrawModule {
     fn render_board(&self, surface: &mut ad_sdk::canvas::AdSurface) {
         let w = surface.width;
         let h = surface.height;
+        let sf = (h as f32 / 460.0).clamp(0.85, 3.8);
 
         // Warm animator's drafting paper with faint blue peg-bar grid
         fill_rect_px(surface, 0, 0, w, h, 0x00F6_F2E4);
-        let grid_step = if w >= 900 { 32 } else { 24 };
+        let grid_step = (26.0 * sf).round().max(18.0) as usize;
         for x in (0..w).step_by(grid_step) {
             fill_rect_px(surface, x, 0, x + 1, h, 0x00E4_E8EE);
         }
@@ -149,26 +150,30 @@ impl HowToDrawModule {
         }
 
         // Top animation studio header strip
-        let scale = if w >= 960 { 2 } else { 1 };
-        let hdr_h = 26 * scale;
+        let hdr_h = (32.0 * sf).round() as i32;
         fill_rect_px(surface, 0, 0, w, hdr_h, 0x001E_3458);
+        let title_sf = (sf * 1.48).clamp(0.95, 4.2);
         let title = format!(
             "HOW TO DRAW: {}  (BY DAVID SILVERMAN)",
             CHAR_NAMES[self.char_idx % 5]
         );
-        draw_bitmap_text(
+        draw_bitmap_text_f(
             surface,
             &self.font,
             &title,
-            14 * scale,
-            8 * scale,
+            (16.0 * sf).round() as i32,
+            (9.0 * sf).round() as i32,
             Some(0x00FF_E240),
-            scale,
+            title_sf,
         );
 
-        let tip_panel_h = if self.show_tips { 64 * scale } else { 16 * scale };
-        let work_top = hdr_h + 10;
-        let work_bot = (h - tip_panel_h - 10).max(work_top + 60);
+        let tip_panel_h = if self.show_tips {
+            (70.0 * sf).round() as i32
+        } else {
+            (16.0 * sf).round() as i32
+        };
+        let work_top = hdr_h + (10.0 * sf) as i32;
+        let work_bot = (h - tip_panel_h - (10.0 * sf) as i32).max(work_top + 60);
         let work_h = work_bot - work_top;
         let work_cx = w / 2;
 
@@ -176,7 +181,7 @@ impl HowToDrawModule {
         if let Some(drawing) = self.drawings.get(self.char_idx) {
             let dw = (drawing.max_x - drawing.min_x).max(1) as f32;
             let dh = (drawing.max_y - drawing.min_y).max(1) as f32;
-            let sc = ((w as f32 * 0.42) / dw).min((work_h as f32 * 0.86) / dh);
+            let sc = ((w as f32 * 0.44) / dw).min((work_h as f32 * 0.88) / dh);
 
             // Place sketch on left half when finished/wild is shown, or centered while sketching
             let sketch_cx = if self.phase == DrawPhase::Sketching {
@@ -193,7 +198,7 @@ impl HowToDrawModule {
             } else {
                 drawing.strokes.len()
             };
-            let thick = if w >= 900 { 3 } else { 2 };
+            let thick = (2.4 * sf).round().clamp(2.0, 8.0) as i32;
 
             for (si, st) in drawing.strokes.iter().enumerate() {
                 if si > max_st {
@@ -218,38 +223,53 @@ impl HowToDrawModule {
                     let p = st[limit_pts - 1];
                     let px = (sketch_cx + (p.0 as f32 - mid_x) * sc) as i32;
                     let py = (sketch_cy + (p.1 as f32 - mid_y) * sc) as i32;
-                    fill_circle_px(surface, px, py, 3 * scale, 0x00E8_3220);
+                    fill_circle_px(surface, px, py, (4.0 * sf).round().max(3.0) as i32, 0x00E8_3220);
                 }
             }
 
-            // Show Finished Color Character or Goofy Wild Variant on the right half!
+            // Show Finished Color Character or Goofy Wild Variant smoothly scaled on the right half!
+            let right_max_w = w as f32 * 0.42;
+            let right_max_h = work_h as f32 * 0.86;
             if self.phase == DrawPhase::FinishedColor {
                 if let Some(fin) = self.finished.get(self.char_idx) {
-                    let sp_scale = if w >= 960 && fin.h * 2 <= work_h { 2 } else { 1 };
-                    let fx = (w as f32 * 0.68) as i32 - (fin.w * sp_scale) / 2;
-                    let fy = work_top + (work_h - fin.h * sp_scale) / 2;
-                    fin.blit_scaled(surface, fx, fy, sp_scale);
+                    let sp_sf = (right_max_w / fin.w.max(1) as f32)
+                        .min(right_max_h / fin.h.max(1) as f32)
+                        .clamp(1.0, 4.0);
+                    let fw = (fin.w as f32 * sp_sf).round() as i32;
+                    let fh = (fin.h as f32 * sp_sf).round() as i32;
+                    let fx = (w as f32 * 0.70) as i32 - fw / 2;
+                    let fy = work_top + (work_h - fh) / 2;
+                    fin.blit_transformed_f(surface, fx, fy, sp_sf, false, false, true, false);
                 }
             } else if self.phase == DrawPhase::WildVariant {
                 let wild_idx = (self.char_idx * 4 + (self.wild_sub % 4)) % self.wilds.len().max(1);
                 if let Some(wild) = self.wilds.get(wild_idx) {
-                    let sp_scale = if w >= 1000 && wild.h * 2 <= work_h {
-                        2
-                    } else {
-                        1
-                    };
-                    let fx = (w as f32 * 0.68) as i32 - (wild.w * sp_scale) / 2;
-                    let fy = work_top + (work_h - wild.h * sp_scale) / 2;
-                    wild.blit_scaled(surface, fx, fy, sp_scale);
+                    let sp_sf = (right_max_w / wild.w.max(1) as f32)
+                        .min(right_max_h / wild.h.max(1) as f32)
+                        .clamp(1.0, 4.0);
+                    let fw = (wild.w as f32 * sp_sf).round() as i32;
+                    let fh = (wild.h as f32 * sp_sf).round() as i32;
+                    let fx = (w as f32 * 0.70) as i32 - fw / 2;
+                    let fy = work_top + (work_h - fh) / 2;
+                    wild.blit_transformed_f(surface, fx, fy, sp_sf, false, false, true, false);
                 }
             }
         }
 
         // Bottom Drawing Tips card
         if self.show_tips {
+            let pad = (12.0 * sf).round() as i32;
             let ty = h - tip_panel_h;
-            fill_rect_px(surface, 10, ty, w - 10, h - 8, 0x00FF_FBE0);
-            draw_rect_outline_px(surface, 10, ty, w - 10, h - 8, 0x0026_4878, 2);
+            fill_rect_px(surface, pad, ty, w - pad, h - (8.0 * sf) as i32, 0x00FF_FBE0);
+            draw_rect_outline_px(
+                surface,
+                pad,
+                ty,
+                w - pad,
+                h - (8.0 * sf) as i32,
+                0x0026_4878,
+                (2.0 * sf).round().max(2.0) as i32,
+            );
 
             let tip_text = match self.phase {
                 DrawPhase::Sketching => {
@@ -285,22 +305,24 @@ impl HowToDrawModule {
                 }
             };
 
-            let mut ly = ty + 8 * scale;
-            let max_w = (w - 40).max(100);
-            for line in wrap_bitmap_text(&self.font, &tip_text, max_w, scale) {
-                if ly + 12 * scale > h - 10 {
+            let tip_sf = (sf * 1.40).clamp(0.95, 4.0);
+            let lh = (17.0 * tip_sf).round() as i32;
+            let mut ly = ty + (9.0 * sf).round() as i32;
+            let max_w = (w - pad * 4).max(120);
+            for line in wrap_bitmap_text_f(&self.font, &tip_text, max_w, tip_sf) {
+                if ly + lh > h - (8.0 * sf) as i32 {
                     break;
                 }
-                draw_bitmap_text(
+                draw_bitmap_text_f(
                     surface,
                     &self.font,
                     &line,
-                    20,
+                    pad + (10.0 * sf).round() as i32,
                     ly,
                     Some(0x0018_2848),
-                    scale,
+                    tip_sf,
                 );
-                ly += 14 * scale;
+                ly += lh;
             }
         }
     }

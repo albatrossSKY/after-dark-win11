@@ -1206,6 +1206,54 @@ impl AdSurface {
             StretchBlt(self.hdc, dx, dy, dw, dh, src.hdc(), sx, sy, sw, sh, rop);
         }
     }
+
+    pub fn stretch_blt_bitmap_with_brush(
+        &mut self,
+        dx: i32,
+        dy: i32,
+        dw: i32,
+        dh: i32,
+        bmp: &AdBitmap,
+        sx: i32,
+        sy: i32,
+        sw: i32,
+        sh: i32,
+        brush_color: u32,
+        rop: u32,
+    ) {
+        unsafe {
+            let brush = CreateSolidBrush(brush_color);
+            let old = SelectObject(self.hdc, brush as HGDIOBJ);
+            SetStretchBltMode(self.hdc, COLORONCOLOR);
+            StretchBlt(self.hdc, dx, dy, dw, dh, bmp.hdc(), sx, sy, sw, sh, rop);
+            SelectObject(self.hdc, old);
+            DeleteObject(brush as HGDIOBJ);
+        }
+    }
+
+    pub fn stretch_blt_surface_with_brush(
+        &mut self,
+        dx: i32,
+        dy: i32,
+        dw: i32,
+        dh: i32,
+        src: &AdSurface,
+        sx: i32,
+        sy: i32,
+        sw: i32,
+        sh: i32,
+        brush_color: u32,
+        rop: u32,
+    ) {
+        unsafe {
+            let brush = CreateSolidBrush(brush_color);
+            let old = SelectObject(self.hdc, brush as HGDIOBJ);
+            SetStretchBltMode(self.hdc, COLORONCOLOR);
+            StretchBlt(self.hdc, dx, dy, dw, dh, src.hdc(), sx, sy, sw, sh, rop);
+            SelectObject(self.hdc, old);
+            DeleteObject(brush as HGDIOBJ);
+        }
+    }
 }
 
 impl Drop for AdSurface {

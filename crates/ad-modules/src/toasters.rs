@@ -62,6 +62,9 @@ pub struct ToastersModule {
     /// 1-indexed upper bound (`1..num_slots`, matching `DS:0x0010` = `iControlValue[0] + 1`).
     num_slots: usize,
     toast_shade: i32,
+    /// Proportional HD/4K sprite size (`64` at <=480p, scales smoothly up to 4K!).
+    sprite_sz: i32,
+    scale_f: f32,
     sprites: Option<ToasterSprites>,
     // Exact 15-element 1-indexed arrays from TOASTERS.AD DS:0x0472..0x0547
     state: [i32; 15],
@@ -78,6 +81,8 @@ impl ToastersModule {
         Self {
             num_slots: 3,
             toast_shade: 0,
+            sprite_sz: 64,
+            scale_f: 1.0,
             sprites: None,
             state: [0; 15],
             old_x: [0; 15],
@@ -128,13 +133,14 @@ impl ToastersModule {
         }
     }
 
-    /// Exact 1:1 `CheckNoCollision(idx)` (`1:0AE6..1:0B81`): Win16 `IntersectRect` half-open 64×64 test.
+    /// Exact 1:1 `CheckNoCollision(idx)` (`1:0AE6..1:0B81`): half-open `sprite_sz × sprite_sz` test.
     fn check_no_collision(&self, idx: usize) -> bool {
         let sx = self.x[idx];
         let sy = self.y[idx];
+        let sz = self.sprite_sz;
         for j in 1..self.num_slots {
             if j != idx {
-                if (sx - self.x[j]).abs() < 64 && (sy - self.y[j]).abs() < 64 {
+                if (sx - self.x[j]).abs() < sz && (sy - self.y[j]).abs() < sz {
                     return false;
                 }
             }
@@ -142,10 +148,12 @@ impl ToastersModule {
         true
     }
 
-    /// Exact 1:1 `SpawnObject(idx)` (`1:09E6..1:0AE5`).
+    /// Exact 1:1 `SpawnObject(idx)` (`1:09E6..1:0AE5`), scaled cleanly for modern HD/4K displays.
     fn spawn_object(&mut self, idx: usize, ctx: &mut AdContext<'_>) -> bool {
-        let w = ctx.module.rgn_width.max(64);
-        let h = ctx.module.rgn_height.max(64);
+        let sz = self.sprite_sz;
+        let w = ctx.module.rgn_width.max(sz);
+        let h = ctx.module.rgn_height.max(sz);
+        let pad = (20.0 * self.scale_f).round() as i32;
         let mut tries = 0;
         loop {
             tries += 1;
@@ -154,7 +162,7 @@ impl ToastersModule {
             }
             if ctx.rng.rand_mod(100) < 50 {
                 // 50%: spawn off RIGHT edge
-                let sx = w + 20;
+                let sx = w + pad;
                 let sy = ctx.rng.rand_mod(h);
                 self.old_x[idx] = sx;
                 self.x[idx] = sx;
@@ -162,8 +170,8 @@ impl ToastersModule {
                 self.y[idx] = sy;
             } else {
                 // 50%: spawn off TOP edge
-                let sx = ctx.rng.rand_mod(w) + 20;
-                let sy = -60;
+                let sx = ctx.rng.rand_mod(w) + pad;
+                let sy = -(sz - 4);
                 self.old_x[idx] = sx;
                 self.x[idx] = sx;
                 self.old_y[idx] = sy;
@@ -175,14 +183,15 @@ impl ToastersModule {
         }
 
         // 70% Toaster, 30% Toast
+        let sp = self.scale_f.round().max(1.0) as i32;
         if ctx.rng.rand_mod(100) < 70 {
-            let vy = ctx.rng.rand_mod(3) + 1; // 1, 2, or 3
+            let vy = (ctx.rng.rand_mod(3) + 1) * sp;
             self.vy[idx] = vy;
-            self.vx[idx] = vy * 2; // 2, 4, or 6
+            self.vx[idx] = vy * 2;
             self.state[idx] = ctx.rng.rand_mod(12); // 0..11
         } else {
-            self.vy[idx] = 1;
-            self.vx[idx] = 2;
+            self.vy[idx] = sp;
+            self.vx[idx] = sp * 2;
             self.state[idx] = 12; // Toast
         }
         true
@@ -204,6 +213,9 @@ impl AdModule for ToastersModule {
         let count = ctx.module.control_value[0].clamp(1, 12) as usize;
         self.num_slots = count + 1; // 1-indexed slots 1..count
         self.apply_toast_control(ctx.module.control_value[1]);
+
+        self.scale_f = (ctx.module.rgn_height as f32 / 480.0).clamp(1.0, 4.0);
+        self.sprite_sz = (64.0 * self.scale_f).round().max(64.0) as i32;
 
         let mono = ctx.system.bits_per_pixel == 1;
         self.sprites = ToasterSprites::load(mono);
@@ -241,33 +253,31 @@ impl AdModule for ToastersModule {
         }
         let black = rgb(0, 0, 0);
         let rgn_h = ctx.module.rgn_height;
+        let sz = self.sprite_sz;
+        let sp = self.scale_f.round().max(1.0) as i32;
 
         for i in 1..self.num_slots {
-            // STEP 1: Erase exposed trail strips for toasters (toast skips because >=4px black border)
-            if self.state[i] < 12 {
-                // Right vertical strip
-                if self.old_x[i] + 64 > self.x[i] + 64 {
-                    ctx.surface.fill_rect_rgb(
-                        self.x[i] + 64,
-                        self.old_y[i],
-                        self.old_x[i] + 64,
-                        self.old_y[i] + 64,
-                        black,
-                    );
-                }
-                // Top horizontal strip
-                if self.y[i] > self.old_y[i] {
-                    ctx.surface.fill_rect_rgb(
-                        self.old_x[i],
-                        self.old_y[i],
-                        self.old_x[i] + 64,
-                        self.y[i],
-                        black,
-                    );
-                }
+            // STEP 1: Erase exposed trail strips for toasters & toast cleanly at any HD/4K scale
+            if self.old_x[i] + sz > self.x[i] + sz {
+                ctx.surface.fill_rect_rgb(
+                    self.x[i] + sz,
+                    self.old_y[i],
+                    self.old_x[i] + sz,
+                    self.old_y[i] + sz,
+                    black,
+                );
+            }
+            if self.y[i] > self.old_y[i] {
+                ctx.surface.fill_rect_rgb(
+                    self.old_x[i],
+                    self.old_y[i],
+                    self.old_x[i] + sz,
+                    self.y[i],
+                    black,
+                );
             }
 
-            // STEP 2: Draw sprite via opaque SRCCOPY (0x00CC0020)
+            // STEP 2: Draw sprite via crisp opaque SRCCOPY (native 1:1 at 640x480, scaled cleanly for HD/4K!)
             if let Some(sprites) = self.sprites.as_ref() {
                 let bmp: Option<&AdBitmap> = match self.state[i] {
                     0 | 1 => Some(&sprites.wing_dn),
@@ -284,16 +294,31 @@ impl AdModule for ToastersModule {
                 if let Some(bmp) = bmp {
                     ctx.surface.set_text_color(rgb(0, 0, 0));
                     ctx.surface.set_bk_color(rgb(255, 255, 255));
-                    ctx.surface.bit_blt_bitmap(
-                        self.x[i],
-                        self.y[i],
-                        bmp.width,
-                        bmp.height,
-                        bmp,
-                        0,
-                        0,
-                        ROP_SRCCOPY,
-                    );
+                    if sz == bmp.width && sz == bmp.height {
+                        ctx.surface.bit_blt_bitmap(
+                            self.x[i],
+                            self.y[i],
+                            bmp.width,
+                            bmp.height,
+                            bmp,
+                            0,
+                            0,
+                            ROP_SRCCOPY,
+                        );
+                    } else {
+                        ctx.surface.stretch_blt_bitmap(
+                            self.x[i],
+                            self.y[i],
+                            sz,
+                            sz,
+                            bmp,
+                            0,
+                            0,
+                            bmp.width,
+                            bmp.height,
+                            ROP_SRCCOPY,
+                        );
+                    }
                 }
             }
 
@@ -301,26 +326,26 @@ impl AdModule for ToastersModule {
             self.old_x[i] = self.x[i];
             self.old_y[i] = self.y[i];
 
-            // STEP 4: Random toaster speed variation (exact original: rand() < 550 -> vy += rand() % 3)
+            // STEP 4: Random toaster speed variation
             if self.state[i] != 12 && ctx.rng.rand() < 550 {
-                self.vy[i] += ctx.rng.rand_mod(3);
-                if self.vy[i] > 3 {
-                    self.vy[i] = 3;
+                self.vy[i] += ctx.rng.rand_mod(3) * sp;
+                if self.vy[i] > 3 * sp {
+                    self.vy[i] = 3 * sp;
                 }
-                if self.vy[i] < 1 {
-                    self.vy[i] = 1;
+                if self.vy[i] < sp {
+                    self.vy[i] = sp;
                 }
                 self.vx[i] = self.vy[i] * 2;
             }
 
             // STEP 5: Horizontal move & left-edge offscreen respawn
             self.x[i] -= self.vx[i];
-            if self.x[i] <= -80 {
+            if self.x[i] <= -(sz + 16) {
                 ctx.surface.fill_rect_rgb(
                     self.x[i],
                     self.y[i],
-                    self.x[i] + 64,
-                    self.y[i] + 64,
+                    self.x[i] + sz,
+                    self.y[i] + sz,
                     black,
                 );
                 if !self.spawn_object(i, ctx) {
@@ -331,12 +356,12 @@ impl AdModule for ToastersModule {
             // STEP 6: Vertical move & bottom-edge offscreen respawn
             let save_y = self.y[i];
             self.y[i] += self.vy[i];
-            if self.y[i] >= rgn_h + 50 {
+            if self.y[i] >= rgn_h + sz {
                 ctx.surface.fill_rect_rgb(
                     self.x[i],
                     self.y[i],
-                    self.x[i] + 64,
-                    self.y[i] + 64,
+                    self.x[i] + sz,
+                    self.y[i] + sz,
                     black,
                 );
                 let _ = self.spawn_object(i, ctx);
@@ -346,11 +371,11 @@ impl AdModule for ToastersModule {
             if !self.check_no_collision(i) {
                 self.x[i] += self.vx[i];
                 self.y[i] = save_y;
-                if self.vy[i] > 1 {
-                    self.vy[i] -= 1;
+                if self.vy[i] > sp {
+                    self.vy[i] -= sp;
                     self.vx[i] = self.vy[i] * 2;
                 }
-                self.y[i] += 3;
+                self.y[i] += 3 * sp;
                 if !self.check_no_collision(i) {
                     self.y[i] = save_y;
                 }
@@ -364,7 +389,7 @@ impl AdModule for ToastersModule {
                 self.x[i] -= self.vx[i] * 2;
                 if !self.check_no_collision(i) {
                     self.x[i] = save_x;
-                    self.y[i] = cur_y + 3;
+                    self.y[i] = cur_y + 3 * sp;
                     if !self.check_no_collision(i) {
                         self.y[i] = cur_y;
                         self.x[i] = save_x;
@@ -377,7 +402,7 @@ impl AdModule for ToastersModule {
 
             // STEP 9: Advance wing animation cycle (fast toasters step by +2, slow/med by +1)
             if self.state[i] < 12 {
-                if self.vx[i] > 4 {
+                if self.vx[i] > 4 * sp {
                     self.state[i] += 2;
                 } else {
                     self.state[i] += 1;

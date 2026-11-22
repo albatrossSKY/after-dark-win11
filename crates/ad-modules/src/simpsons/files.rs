@@ -10,8 +10,8 @@ use ad_sdk::{AdContext, AdControl, AdMetadata, AdModule, AdResult};
 
 use super::{
     KIND_LIST, MOD_FILES, RlepBank, SND_FOLDER_OPEN, SONG_SIMPSONS_THEME, SimpsonsPack,
-    SpriteFrame, draw_bitmap_text, draw_rect_outline_px, fill_rect_px, mac_roman_to_string,
-    music_loops_from_slider, wrap_bitmap_text,
+    SpriteFrame, draw_bitmap_text_f, draw_rect_outline_px, fill_rect_px, mac_roman_to_string,
+    music_loops_from_slider, wrap_bitmap_text_f,
 };
 
 struct Dossier {
@@ -196,124 +196,156 @@ impl SimpsonsFilesModule {
     fn render_current_dossier(&self, surface: &mut ad_sdk::canvas::AdSurface) {
         let w = surface.width;
         let h = surface.height;
-        // Deep Springfield cabinet slate backdrop
-        fill_rect_px(surface, 0, 0, w, h, 0x0012_1C2B);
+        // Deep Springfield City Hall cabinet desk gradient backdrop
+        {
+            let dst = surface.pixels_mut();
+            for y in 0..h {
+                let t = y as f32 / h.max(1) as f32;
+                let r = (14.0 + t * 14.0) as u32;
+                let g = (24.0 + t * 18.0) as u32;
+                let b = (40.0 + t * 22.0) as u32;
+                let col = (r << 16) | (g << 8) | b;
+                let row = (y * w) as usize;
+                dst[row..row + w as usize].fill(col);
+            }
+        }
 
         if self.dossiers.is_empty() || self.order.is_empty() {
             return;
         }
         let dossier = &self.dossiers[self.order[self.cur_pos % self.order.len()]];
 
-        let scale = if w >= 1100 { 2 } else { 1 };
-        let card_w = (w - 40).clamp(280, 620 * scale);
-        let card_h = (h - 48).clamp(220, 420 * scale);
+        // Continuous HD/4K widescreen scaling: fills ~86% height & up to ~88% width cleanly
+        let sf = (h as f32 / 460.0).clamp(0.85, 3.8);
+        let card_h = ((h as f32 * 0.80) as i32).max(200);
+        let card_w = ((w as f32 * 0.88).min(card_h as f32 * 1.56) as i32).max(280);
         let cx = (w - card_w) / 2;
-        let cy = (h - card_h) / 2 + 8;
+        let tab_h = (22.0 * sf).round().max(16.0) as i32;
+        let cy = (h - card_h + tab_h) / 2;
 
         // Drop shadow
-        fill_rect_px(surface, cx + 6, cy + 6, cx + card_w + 6, cy + card_h + 6, 0x0008_0C14);
+        let sh = (8.0 * sf).round().max(4.0) as i32;
+        fill_rect_px(surface, cx + sh, cy + sh, cx + card_w + sh, cy + card_h + sh, 0x0007_0B13);
+
         // Manila folder tab at top-left
-        let tab_w = (card_w / 3).clamp(110, 260);
-        fill_rect_px(surface, cx + 10, cy - 18, cx + 10 + tab_w, cy + 2, 0x00DF_C48B);
-        draw_rect_outline_px(surface, cx + 10, cy - 18, cx + 10 + tab_w, cy + 2, 0x008A_6B38, 2);
+        let tab_w = (card_w as f32 * 0.34).clamp(120.0 * sf, 310.0 * sf) as i32;
+        let tab_x = cx + (14.0 * sf).round() as i32;
+        let bdr = (2.2 * sf).round().max(2.0) as i32;
+        fill_rect_px(surface, tab_x, cy - tab_h, tab_x + tab_w, cy + 2, 0x00DF_C48B);
+        draw_rect_outline_px(surface, tab_x, cy - tab_h, tab_x + tab_w, cy + 2, 0x008A_6B38, bdr);
 
         // Manila folder body
         fill_rect_px(surface, cx, cy, cx + card_w, cy + card_h, 0x00F6_E7BE);
-        draw_rect_outline_px(surface, cx, cy, cx + card_w, cy + card_h, 0x008A_6B38, 3);
+        draw_rect_outline_px(surface, cx, cy, cx + card_w, cy + card_h, 0x008A_6B38, bdr + 1);
+        let inset = (6.0 * sf).round().max(4.0) as i32;
         draw_rect_outline_px(
             surface,
-            cx + 5,
-            cy + 5,
-            cx + card_w - 5,
-            cy + card_h - 5,
+            cx + inset,
+            cy + inset,
+            cx + card_w - inset,
+            cy + card_h - inset,
             0x00C8_A96E,
             1,
         );
 
-        // Red "CONFIDENTIAL" stamp on folder tab
-        draw_bitmap_text(
+        // Red "SPRINGFIELD FILE" stamp on folder tab
+        let tab_font_sf = (sf * 0.92).clamp(0.75, 3.0);
+        draw_bitmap_text_f(
             surface,
             &self.font,
             "SPRINGFIELD FILE",
-            cx + 18,
-            cy - 15,
+            tab_x + (10.0 * sf).round() as i32,
+            cy - tab_h + (4.0 * sf).round() as i32,
             Some(0x009E_1B1B),
-            1,
+            tab_font_sf,
         );
 
-        // Portrait on left
-        let mut text_left = cx + 18 * scale;
+        let pad = (20.0 * sf).round() as i32;
+        // Portrait on left — smooth bilinear HD/4K fit to ~72% of folder height!
+        let mut text_left = cx + pad;
         if let Some(portrait) = self.portraits.get(dossier.char_idx) {
-            let p_scale = if card_w >= 860 { 2 } else { 1 };
-            let px = cx + 16 * scale;
-            let py = cy + 20 * scale;
-            portrait.blit_scaled(surface, px, py, p_scale);
-            text_left = px + portrait.w * p_scale + 18 * scale;
+            let max_pw = card_w as f32 * 0.34;
+            let max_ph = (card_h - pad * 2) as f32 * 0.88;
+            let p_sf = (max_pw / portrait.w.max(1) as f32)
+                .min(max_ph / portrait.h.max(1) as f32)
+                .clamp(0.85, 3.8);
+            let pw = (portrait.w as f32 * p_sf).round() as i32;
+            let ph = (portrait.h as f32 * p_sf).round() as i32;
+            let px = cx + pad;
+            let py = cy + (card_h - ph) / 2;
+            portrait.blit_transformed_f(surface, px, py, p_sf, false, false, true, false);
+            text_left = px + pw + pad;
         }
 
         // Character doodle/banner at top-right if room
-        let mut text_top = cy + 18 * scale;
-        let text_max_w = (cx + card_w - 18 * scale - text_left).max(120);
+        let mut text_top = cy + pad;
+        let text_max_w = (cx + card_w - pad - text_left).max(120);
         if let Some(banner) = self.banners.get(dossier.char_idx) {
-            let b_scale = if card_w >= 960 && banner.w * 2 <= text_max_w {
-                2
-            } else {
-                1
-            };
-            if banner.w * b_scale <= text_max_w && banner.h * b_scale < card_h / 2 {
-                let bx = text_left + (text_max_w - banner.w * b_scale) / 2;
-                banner.blit_scaled(surface, bx, text_top, b_scale);
-                text_top += banner.h * b_scale + 10 * scale;
+            let max_bw = text_max_w as f32 * 0.92;
+            let max_bh = card_h as f32 * 0.24;
+            let b_sf = (max_bw / banner.w.max(1) as f32)
+                .min(max_bh / banner.h.max(1) as f32)
+                .clamp(0.75, 2.8);
+            let bw = (banner.w as f32 * b_sf).round() as i32;
+            let bh = (banner.h as f32 * b_sf).round() as i32;
+            if bw <= text_max_w && bh < card_h / 2 {
+                let bx = text_left + (text_max_w - bw) / 2;
+                banner.blit_transformed_f(surface, bx, text_top, b_sf, false, false, true, false);
+                text_top += bh + (10.0 * sf).round() as i32;
             }
         }
 
         // Dossier title in bold crimson
-        let font_scale = if card_w >= 920 { 2 } else { 1 };
-        let line_h = 18 * font_scale;
-        let title_lines = wrap_bitmap_text(&self.font, &dossier.title, text_max_w, font_scale);
+        let title_sf = (sf * 1.25).clamp(0.95, 3.8);
+        let body_sf = (sf * 1.08).clamp(0.85, 3.4);
+        let title_lh = (18.0 * title_sf).round() as i32;
+        let body_lh = (17.0 * body_sf).round() as i32;
+
+        let title_lines = wrap_bitmap_text_f(&self.font, &dossier.title, text_max_w, title_sf);
         for tl in &title_lines {
-            draw_bitmap_text(
+            draw_bitmap_text_f(
                 surface,
                 &self.font,
                 tl,
                 text_left,
                 text_top,
                 Some(0x00A8_1818),
-                font_scale,
+                title_sf,
             );
-            text_top += line_h;
+            text_top += title_lh;
         }
         // Horizontal rule
+        let rule_h = (2.5 * sf).round().max(2.0) as i32;
         fill_rect_px(
             surface,
             text_left,
-            text_top + 2,
-            cx + card_w - 18 * scale,
-            text_top + 4,
+            text_top + (2.0 * sf) as i32,
+            cx + card_w - pad,
+            text_top + (2.0 * sf) as i32 + rule_h,
             0x008A_6B38,
         );
-        text_top += 10 * scale;
+        text_top += (10.0 * sf).round() as i32;
 
         // Revealed bullet points in crisp dark ink
         let show_cnt = self.reveal_items.min(dossier.items.len());
         for item in &dossier.items[..show_cnt] {
-            let wrapped = wrap_bitmap_text(&self.font, item, text_max_w, font_scale);
+            let wrapped = wrap_bitmap_text_f(&self.font, item, text_max_w, body_sf);
             for wl in &wrapped {
-                if text_top + line_h > cy + card_h - 10 {
+                if text_top + body_lh > cy + card_h - inset - 4 {
                     break;
                 }
-                draw_bitmap_text(
+                draw_bitmap_text_f(
                     surface,
                     &self.font,
                     wl,
                     text_left,
                     text_top,
                     Some(0x001A_1A28),
-                    font_scale,
+                    body_sf,
                 );
-                text_top += line_h;
+                text_top += body_lh;
             }
-            text_top += 4 * font_scale;
+            text_top += (5.0 * body_sf).round() as i32;
         }
     }
 }

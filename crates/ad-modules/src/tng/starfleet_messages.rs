@@ -1,28 +1,31 @@
 //! *Starfleet Messages* — 1994 *Star Trek: The Next Generation* After Dark 3.0 Module.
 //!
-//! Displays Starfleet away messages across authentic **Plaque**, **Romulan Star
-//! Empire** (`RLEP #3000` Bird-of-Prey console), and **Subspace LCARS** (`RLEP #5000`)
-//! consoles with all 9 built-in TNG messages (`STR# #2000`), hailing frequencies,
-//! and Romulan comm beeps!
+//! Full-widescreen responsive Starfleet away messages across authentic **Gold
+//! Dedication Plaque** (`RLEP #4001` emblem + `#4024` serif font), **Romulan
+//! Star Empire Bird-of-Prey** (`OFst #3000` + `#3032` animated glyphs), and
+//! **Subspace LCARS** (`RLEP #5000` comm badge + high-DPI native LCARS fonts)
+//! consoles with all 9 authentic TNG messages (`STR# #2000`) and bridge audio.
 
 use ad_sdk::{AdContext, AdControl, AdMetadata, AdModule, AdResult};
 
 use crate::simpsons::{
-    CompoundAnim, KIND_STR_LIST, RlepBank, draw_bitmap_text, draw_rect_outline_px, fill_rect_px,
-    measure_bitmap_text, parse_str_list, wrap_bitmap_text,
+    CompoundAnim, KIND_STR_LIST, RlepBank, draw_bitmap_text, draw_rect_outline_px, fill_circle_px,
+    fill_rect_px, measure_bitmap_text, parse_str_list, wrap_bitmap_text,
 };
 use super::{
-    FONT_LCARS_14, FONT_LCARS_18, MOD_STARFLEET_MSG, SND_HAILING, SND_ROMULAN_BEEP1,
-    SND_ROMULAN_BEEP2, SND_VIEWSCREEN, load_anim, load_lcars_font, load_rlep, tng_pack,
+    LCARS_AMBER, LCARS_GOLD, LCARS_LAVENDER, LCARS_PEACH, LCARS_SKY, LcarsFontSet,
+    MOD_STARFLEET_MSG, SND_HAILING, SND_ROMULAN_BEEP1, SND_ROMULAN_BEEP2, SND_VIEWSCREEN,
+    draw_lcars_elbow_bl, draw_lcars_elbow_tl, fill_rounded_rect, lcars_upper, load_anim,
+    load_rlep, stage_fit, tng_pack,
 };
 
 pub struct StarfleetMessagesModule {
     romulan_anim: Option<CompoundAnim>,
     plaque_bank: RlepBank,
+    plaque_font: RlepBank,
     subspace_bank: RlepBank,
     anim_icons: RlepBank,
-    font14: RlepBank,
-    font18: RlepBank,
+    fonts: LcarsFontSet,
     messages: Vec<String>,
     style_setting: i32, // 0=Plaque, 1=Romulan, 2=Subspace, 3=Random
     active_style: i32,
@@ -35,28 +38,17 @@ pub struct StarfleetMessagesModule {
 
 impl StarfleetMessagesModule {
     pub fn new() -> Self {
+        let empty = || RlepBank {
+            frames: Vec::new(),
+            palette: Vec::new(),
+        };
         Self {
             romulan_anim: None,
-            plaque_bank: RlepBank {
-                frames: Vec::new(),
-                palette: Vec::new(),
-            },
-            subspace_bank: RlepBank {
-                frames: Vec::new(),
-                palette: Vec::new(),
-            },
-            anim_icons: RlepBank {
-                frames: Vec::new(),
-                palette: Vec::new(),
-            },
-            font14: RlepBank {
-                frames: Vec::new(),
-                palette: Vec::new(),
-            },
-            font18: RlepBank {
-                frames: Vec::new(),
-                palette: Vec::new(),
-            },
+            plaque_bank: empty(),
+            plaque_font: empty(),
+            subspace_bank: empty(),
+            anim_icons: empty(),
+            fonts: LcarsFontSet::empty(),
             messages: Vec::new(),
             style_setting: 3,
             active_style: 1,
@@ -121,9 +113,9 @@ impl StarfleetMessagesModule {
         self.romulan_anim = Some(load_anim(MOD_STARFLEET_MSG, 3000));
         self.anim_icons = load_rlep(MOD_STARFLEET_MSG, 3032);
         self.plaque_bank = load_rlep(MOD_STARFLEET_MSG, 4001);
+        self.plaque_font = load_rlep(MOD_STARFLEET_MSG, 4024);
         self.subspace_bank = load_rlep(MOD_STARFLEET_MSG, 5000);
-        self.font14 = load_lcars_font(FONT_LCARS_14);
-        self.font18 = load_lcars_font(FONT_LCARS_18);
+        self.fonts.ensure_loaded();
 
         if let Some(raw) = tng_pack().get(MOD_STARFLEET_MSG, KIND_STR_LIST, 2000) {
             self.messages = parse_str_list(raw);
@@ -140,185 +132,280 @@ impl StarfleetMessagesModule {
             .get(self.active_msg % self.messages.len().max(1))
             .map(|s| s.as_str())
             .unwrap_or("INCOMING SUBSPACE TRANSMISSION");
-        let msg_upper = super::lcars_upper(msg_raw);
+        let msg_upper = lcars_upper(msg_raw);
         let msg = msg_upper.as_str();
 
-        let s = if w >= 1100 { 2 } else { 1 };
+        let pad = (h / 28).clamp(10, 36);
+        let msg_px = (h / 16).clamp(18, 48);
+        let hdr_px = (h / 24).clamp(14, 30);
+        let small_px = (h / 34).clamp(14, 20);
+        let (f_msg, s_msg, lh_msg) = self.fonts.pick(msg_px);
+        let (f_hdr, s_hdr, lh_hdr) = self.fonts.pick(hdr_px);
+        let (f_small, s_small, lh_small) = self.fonts.pick(small_px);
 
         match self.active_style {
             0 => {
-                // STARFLEET DEDICATION PLAQUE
-                let pw = (w - 48).clamp(260, 520 * s);
-                let ph = (h - 56).clamp(180, 340 * s);
-                let px = (w - pw) / 2;
-                let py = (h - ph) / 2;
+                // FULL-WIDESCREEN STARFLEET GOLD DEDICATION PLAQUE
+                let px = pad;
+                let py = pad;
+                let pw = w - pad * 2;
+                let ph = h - pad * 2;
+                let rim = (h / 45).clamp(8, 22);
 
+                // Brushed brass/gold outer bezel + deep bronze-ebony inner plate + corner bolts
                 fill_rect_px(surface, px, py, px + pw, py + ph, 0x007E_5C22);
-                fill_rect_px(surface, px + 8, py + 8, px + pw - 8, py + ph - 8, 0x001E_160C);
-                draw_rect_outline_px(surface, px, py, px + pw, py + ph, 0x00F4_C858, 3);
-                draw_rect_outline_px(surface, px + 8, py + 8, px + pw - 8, py + ph - 8, 0x00C8_9634, 2);
+                fill_rect_px(surface, px + rim, py + rim, px + pw - rim, py + ph - rim, 0x001A_130A);
+                draw_rect_outline_px(surface, px, py, px + pw, py + ph, 0x00F6_CE60, 3);
+                draw_rect_outline_px(surface, px + rim, py + rim, px + pw - rim, py + ph - rim, 0x00C8_9634, 2);
 
-                let mut ty = py + 18 * s;
-                if let Some(emblem) = self.plaque_bank.frames.first() {
-                    if emblem.h * s < ph / 2 {
-                        emblem.blit_scaled(surface, px + (pw - emblem.w * s) / 2, ty, s);
-                        ty += emblem.h * s + 10 * s;
-                    }
+                let bolt_r = (rim / 2).clamp(3, 8);
+                let bo = rim * 2;
+                for (bx, by) in [
+                    (px + bo, py + bo),
+                    (px + pw - bo, py + bo),
+                    (px + bo, py + ph - bo),
+                    (px + pw - bo, py + ph - bo),
+                ] {
+                    fill_circle_px(surface, bx, by, bolt_r, 0x00E8_BC4C);
+                    fill_circle_px(surface, bx - 1, by - 1, (bolt_r / 2).max(1), 0x00FF_EE98);
                 }
-                let hdr = "U.S.S. ENTERPRISE  NCC-1701-D";
-                let hw = measure_bitmap_text(&self.font14, hdr, s);
+
+                // Scaled Starfleet Command Emblem (#4001[0])
+                let mut ty = py + rim + (ph / 12);
+                if let Some(emblem) = self.plaque_bank.frames.first() {
+                    let target_eh = (ph as f32 * 0.28).clamp(56.0, 210.0);
+                    let esf = target_eh / emblem.h.max(1) as f32;
+                    let ew = (emblem.w as f32 * esf).round() as i32;
+                    let eh = (emblem.h as f32 * esf).round() as i32;
+                    emblem.blit_rect(
+                        surface,
+                        px + (pw - ew) / 2,
+                        ty,
+                        ew,
+                        eh,
+                        false,
+                        false,
+                        true,
+                        true,
+                    );
+                    ty += eh + (ph / 24).max(12);
+                }
+
+                let hdr = "U.S.S. ENTERPRISE   NCC-1701-D";
+                let hw = measure_bitmap_text(f_hdr, hdr, s_hdr);
                 draw_bitmap_text(
                     surface,
-                    &self.font14,
+                    f_hdr,
                     hdr,
                     px + (pw - hw) / 2,
                     ty,
                     Some(0x00F6_C858),
-                    s,
+                    s_hdr,
                 );
-                ty += 22 * s;
+                ty += lh_hdr + (ph / 24).max(14);
+                fill_rect_px(surface, px + pw / 5, ty - 6, px + (pw * 4) / 5, ty - 4, 0x00C8_9634);
 
-                let lines = wrap_bitmap_text(&self.font18, msg, (pw - 40).max(120), s);
+                // Message rendered in authentic Gold Plaque Serif font (#4024) or high-DPI LCARS font
+                let use_serif = !self.plaque_font.frames.is_empty() && h >= 440;
+                let (pf, ps, plh) = if use_serif {
+                    let sc = (h / 540).clamp(1, 3);
+                    (&self.plaque_font, sc, 28 * sc)
+                } else {
+                    (f_msg, s_msg, lh_msg)
+                };
+                let lines = wrap_bitmap_text(pf, msg, (pw - rim * 6).max(160), ps);
                 for ln in &lines {
-                    if ty + 20 * s > py + ph - 12 {
+                    if ty + plh > py + ph - rim * 2 {
                         break;
                     }
-                    let lw = measure_bitmap_text(&self.font18, ln, s);
+                    let lw = measure_bitmap_text(pf, ln, ps);
                     draw_bitmap_text(
                         surface,
-                        &self.font18,
+                        pf,
                         ln,
                         px + (pw - lw) / 2,
                         ty,
                         Some(0x00FF_EEB8),
-                        s,
+                        ps,
                     );
-                    ty += 22 * s;
+                    ty += plh + 4;
                 }
             }
             1 => {
-                // ROMULAN STAR EMPIRE BIRD-OF-PREY CONSOLE (#3000)
-                if let Some(anim) = &self.romulan_anim {
-                    let rs = if w >= 1040 && h >= 720 { 2 } else { 1 };
-                    let frame_w = 477 * rs;
-                    let frame_h = 317 * rs;
-                    if frame_w <= w && frame_h <= h {
-                        let ox = (w - frame_w) / 2;
-                        let oy = (h - frame_h) / 2;
-                        anim.draw_frame(surface, 0, ox, oy, rs, false, false);
+                // FULL-WIDESCREEN ROMULAN STAR EMPIRE BIRD-OF-PREY CONSOLE (#3000)
+                let (sf, ox, oy) = stage_fit(w, h, 477.0, 317.0, pad / 2, pad / 2);
+                let box_l = ox.round() as i32;
+                let box_r = (ox + 477.0 * sf).round() as i32;
 
-                        // Blinking Romulan glyph indicator (#3032)
-                        if !self.anim_icons.frames.is_empty() {
-                            let gi = (self.tick / 5) % self.anim_icons.frames.len();
-                            self.anim_icons.frames[gi].blit_scaled(
-                                surface,
-                                ox + 20 * rs,
-                                oy + 20 * rs,
-                                rs,
-                            );
+                // Emerald Romulan tactical side wings on widescreen displays
+                for (wx0, wx1, right) in [(0, box_l, false), (box_r, w, true)] {
+                    let ww = wx1 - wx0;
+                    if ww >= 48 {
+                        let wp = (ww / 10).clamp(6, 16);
+                        let ix0 = wx0 + wp;
+                        let ix1 = wx1 - wp;
+                        fill_rect_px(surface, ix0, pad, ix1, pad + 10, 0x0020_C068);
+                        fill_rect_px(surface, ix0, h - pad - 10, ix1, h - pad, 0x0020_C068);
+                        let mut ry = pad + 26;
+                        let mut r_idx = 0usize;
+                        while ry + 18 < h - pad - 20 {
+                            let frac = ((self.tick as f32 * 0.09 + r_idx as f32 * 0.7).sin() * 0.4 + 0.55)
+                                .clamp(0.15, 0.95);
+                            let bw = (((ix1 - ix0) as f32) * frac) as i32;
+                            let bx0 = if right { ix1 - bw } else { ix0 };
+                            fill_rect_px(surface, ix0, ry, ix1, ry + 10, 0x0008_2418);
+                            fill_rect_px(surface, bx0, ry, bx0 + bw, ry + 10, 0x0034_E880);
+                            ry += 22;
+                            r_idx += 1;
                         }
-
-                        // Message text inside lower emerald Romulan readout
-                        let mut ty = oy + 216 * rs;
-                        let max_w = 340 * rs;
-                        let lines = wrap_bitmap_text(&self.font14, msg, max_w, rs);
-                        for ln in lines.iter().take(4) {
-                            let lw = measure_bitmap_text(&self.font14, ln, rs);
-                            draw_bitmap_text(
-                                surface,
-                                &self.font14,
-                                ln,
-                                ox + (frame_w - lw) / 2,
-                                ty,
-                                Some(0x0060_FF98),
-                                rs,
-                            );
-                            ty += 16 * rs;
-                        }
-                        return;
                     }
                 }
-                // Compact Romulan fallback for 320x240 tiles
-                let bx = 12;
-                let by = 12;
-                let bw = w - 24;
-                let bh = h - 24;
-                fill_rect_px(surface, bx, by, bx + bw, by + bh, 0x0004_1C12);
-                draw_rect_outline_px(surface, bx, by, bx + bw, by + bh, 0x0034_E880, 2);
-                draw_bitmap_text(
-                    surface,
-                    &self.font14,
-                    "ROMULAN SUBSPACE CHANNEL",
-                    bx + 12,
-                    by + 12,
-                    Some(0x0044_FF88),
-                    1,
-                );
-                let mut ty = by + 40;
-                for ln in wrap_bitmap_text(&self.font14, msg, (bw - 24).max(80), 1) {
-                    draw_bitmap_text(surface, &self.font14, &ln, bx + 12, ty, Some(0x00B8_FFD0), 1);
-                    ty += 16;
+
+                if let Some(anim) = &self.romulan_anim {
+                    anim.draw_frame_f(surface, 0, box_l, oy.round() as i32, sf, false, true, false);
+
+                    // Blinking Romulan glyph indicator (#3032) scaled to match console
+                    if !self.anim_icons.frames.is_empty() {
+                        let gi = (self.tick / 5) % self.anim_icons.frames.len();
+                        self.anim_icons.frames[gi].blit_transformed_f(
+                            surface,
+                            (ox + 20.0 * sf).round() as i32,
+                            (oy + 20.0 * sf).round() as i32,
+                            sf,
+                            false,
+                            false,
+                            false,
+                            false,
+                        );
+                    }
+
+                    // Crisp high-DPI emerald Romulan message cleanly inside lower readout
+                    let rom_px = (14.0 * sf).round() as i32;
+                    let (f_rom, s_rom, lh_rom) = self.fonts.pick(rom_px.clamp(14, 34));
+                    let mut ty = (oy + 216.0 * sf).round() as i32;
+                    let max_w = (340.0 * sf).round() as i32;
+                    let frame_w = (477.0 * sf).round() as i32;
+                    for ln in wrap_bitmap_text(f_rom, msg, max_w.max(120), s_rom).iter().take(4) {
+                        let lw = measure_bitmap_text(f_rom, ln, s_rom);
+                        draw_bitmap_text(
+                            surface,
+                            f_rom,
+                            ln,
+                            box_l + (frame_w - lw) / 2,
+                            ty,
+                            Some(0x0060_FF98),
+                            s_rom,
+                        );
+                        ty += lh_rom;
+                    }
                 }
             }
             _ => {
-                // STARFLEET SUBSPACE LCARS CONSOLE (#5000)
-                let pw = (w - 36).clamp(260, 560 * s);
-                let ph = (h - 40).clamp(190, 360 * s);
-                let px = (w - pw) / 2;
-                let py = (h - ph) / 2;
+                // FULL-WIDESCREEN STARFLEET SUBSPACE LCARS CONSOLE
+                let ox = pad;
+                let oy = pad;
+                let fw = w - pad * 2;
+                let fh = h - pad * 2;
+                let bar_w = (fw / 10).clamp(42, 130);
+                let top_h = (lh_hdr + 12).clamp(26, 56);
+                let bot_h = (h / 24).clamp(18, 38);
+                let gap = (h / 100).clamp(4, 10);
 
-                // LCARS cyan/amber subspace border
-                fill_rect_px(surface, px, py, px + pw, py + 24 * s, 0x0068_9CFF);
-                fill_rect_px(surface, px, py + ph - 18 * s, px + pw, py + ph, 0x00F4_A038);
-                fill_rect_px(surface, px, py, px + 14 * s, py + ph, 0x00B8_7CF4);
+                // Top & bottom curved LCARS elbows spanning full widescreen display!
+                let split_y = (fh * 44) / 100;
+                draw_lcars_elbow_tl(surface, ox, oy, bar_w, top_h, split_y, fw - top_h, LCARS_SKY);
+                fill_rounded_rect(surface, ox + fw - top_h, oy, ox + fw, oy + top_h, top_h / 2, LCARS_LAVENDER);
+                draw_lcars_elbow_bl(
+                    surface,
+                    ox,
+                    oy + fh,
+                    bar_w,
+                    bot_h,
+                    (fh - split_y - gap).max(bot_h + 36),
+                    fw - bot_h,
+                    LCARS_GOLD,
+                );
+                fill_rounded_rect(surface, ox + fw - bot_h, oy + fh - bot_h, ox + fw, oy + fh, bot_h / 2, LCARS_AMBER);
 
-                // Blinking Starfleet comm badge (#5000[0] or [1])
-                let mut ty = py + 34 * s;
-                if let Some(badge) = self.subspace_bank.frames.get((self.tick / 8) % 2) {
-                    if badge.h * s < ph / 2 {
-                        badge.blit_scaled(surface, px + 26 * s, ty, s);
-                    }
-                }
-                let hdr = "INCOMING SUBSPACE TRANSMISSION";
+                // Header text cleanly in top sky-blue bar
                 draw_bitmap_text(
                     surface,
-                    &self.font14,
-                    hdr,
-                    px + 24 * s,
-                    py + 5 * s,
+                    f_hdr,
+                    "INCOMING SUBSPACE TRANSMISSION  //  PRIORITY ONE",
+                    ox + bar_w + pad,
+                    oy + ((top_h - lh_hdr) / 2).max(2),
                     Some(0x0000_0000),
-                    s,
+                    s_hdr,
                 );
 
-                let text_x = px + (if pw >= 440 { 126 * s } else { 26 * s });
-                let max_w = (px + pw - text_x - 16 * s).max(110);
-                ty += 12 * s;
-                let lines = wrap_bitmap_text(&self.font18, msg, max_w, s);
-                for ln in &lines {
-                    if ty + 20 * s > py + ph - 24 * s {
-                        break;
-                    }
-                    draw_bitmap_text(surface, &self.font18, ln, text_x, ty, Some(0x00FF_CC58), s);
-                    ty += 22 * s;
+                // Left-bar glowing LCARS frequency code
+                fill_rect_px(surface, ox, oy + top_h + gap * 2, ox + bar_w, oy + split_y - gap, LCARS_LAVENDER);
+
+                let vx = ox + bar_w + pad * 2;
+                let vy = oy + top_h + pad * 2;
+                let vw = (ox + fw - vx - pad).max(160);
+                let vh = (oy + fh - bot_h - vy - pad).max(120);
+
+                // Blinking Starfleet Comm Badge (#5000[0] / [1]) smoothly scaled proportionally!
+                let mut text_x = vx;
+                if let Some(badge) = self.subspace_bank.frames.get((self.tick / 8) % 2) {
+                    let target_bh = (vh as f32 * 0.46).clamp(64.0, 240.0);
+                    let bsf = (target_bh / badge.h.max(1) as f32)
+                        .min((vw as f32 * 0.25) / badge.w.max(1) as f32);
+                    let bw = (badge.w as f32 * bsf).round() as i32;
+                    let bh = (badge.h as f32 * bsf).round() as i32;
+                    badge.blit_rect(surface, vx, vy, bw, bh, false, false, true, true);
+                    text_x = vx + bw + pad * 2;
                 }
 
-                // Animated subspace frequency waveform bars along bottom
-                let wave_y = py + ph - 48 * s;
-                for i in 0..16 {
-                    let bh = (((self.tick as f32 * 0.25 + i as f32 * 0.7).sin().abs()) * 20.0 * s as f32)
-                        as i32;
-                    let bx = px + 28 * s + i * 14 * s;
-                    if bx + 8 * s < px + pw - 12 {
-                        fill_rect_px(
-                            surface,
-                            bx,
-                            wave_y - bh,
-                            bx + 8 * s,
-                            wave_y,
-                            0x0048_D8FF,
-                        );
+                // Crisp high-DPI Subspace Message
+                let max_w = (vx + vw - text_x).max(140);
+                let mut ty = vy + pad / 2;
+                let lines = wrap_bitmap_text(f_msg, msg, max_w, s_msg);
+                let wave_h = (vh / 4).clamp(36, 110);
+                for ln in &lines {
+                    if ty + lh_msg > vy + vh - wave_h - pad {
+                        break;
                     }
+                    draw_bitmap_text(surface, f_msg, ln, text_x, ty, Some(LCARS_AMBER), s_msg);
+                    ty += lh_msg + 4;
                 }
+
+                // Full-width live subspace frequency waveform analyzer across entire bottom console!
+                let wave_base = oy + fh - bot_h - pad;
+                let n_bars = (vw / 24).clamp(16, 48);
+                let bar_pitch = vw / n_bars.max(1);
+                let bar_w_px = (bar_pitch * 65 / 100).max(5);
+                for i in 0..n_bars {
+                    let amp = ((self.tick as f32 * 0.22 + i as f32 * 0.55).sin().abs() * 0.65
+                        + (self.tick as f32 * 0.11 - i as f32 * 0.31).cos().abs() * 0.35)
+                        .clamp(0.12, 1.0);
+                    let bh = ((wave_h as f32) * amp) as i32;
+                    let bx = vx + i * bar_pitch;
+                    let col = if amp > 0.82 {
+                        LCARS_PEACH
+                    } else if i % 4 == 0 {
+                        LCARS_LAVENDER
+                    } else {
+                        LCARS_SKY
+                    };
+                    fill_rect_px(surface, bx, wave_base - bh, bx + bar_w_px, wave_base, col);
+                }
+
+                // Bottom bar stardate / channel readout
+                let footer = format!(
+                    "SUBSPACE CHANNEL 47.{:03} GHZ  //  U.S.S. ENTERPRISE NCC-1701-D",
+                    (self.tick * 7) % 999
+                );
+                draw_bitmap_text(
+                    surface,
+                    f_small,
+                    &footer,
+                    vx,
+                    oy + fh - bot_h + ((bot_h - lh_small) / 2).max(1),
+                    Some(0x0000_0000),
+                    s_small,
+                );
             }
         }
     }

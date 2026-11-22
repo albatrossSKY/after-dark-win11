@@ -390,35 +390,317 @@ impl SpriteFrame {
     }
 
     pub fn blit_flipped_x(&self, surface: &mut AdSurface, dx: i32, dy: i32, scale: i32) {
+        self.blit_transformed(surface, dx, dy, scale, true, false);
+    }
+
+    /// Integer-scaled blit supporting `OFtb` per-part `flip_x` (`flags & 1`) and `flip_y` (`flags & 2`).
+    pub fn blit_transformed(
+        &self,
+        surface: &mut AdSurface,
+        dx: i32,
+        dy: i32,
+        scale: i32,
+        flip_x: bool,
+        flip_y: bool,
+    ) {
+        if !flip_x && !flip_y {
+            self.blit_scaled(surface, dx, dy, scale);
+            return;
+        }
         let scale = scale.max(1);
         let sw = surface.width;
         let sh = surface.height;
         let dst = surface.pixels_mut();
         for sy in 0..self.h {
-            let row = (sy * self.w) as usize;
+            let src_y = if flip_y { self.h - 1 - sy } else { sy };
+            let row = (src_y * self.w) as usize;
             let py0 = dy + sy * scale;
             if py0 + scale <= 0 || py0 >= sh {
                 continue;
             }
             for sx in 0..self.w {
-                let c = self.pixels[row + (self.w - 1 - sx) as usize];
+                let src_x = if flip_x { self.w - 1 - sx } else { sx };
+                let c = self.pixels[row + src_x as usize];
                 if c == 0 {
                     continue;
                 }
                 let rgb = c & 0x00FF_FFFF;
                 let px0 = dx + sx * scale;
-                for oy in 0..scale {
-                    let py = py0 + oy;
-                    if py < 0 || py >= sh {
-                        continue;
+                if scale == 1 {
+                    if px0 >= 0 && px0 < sw && py0 >= 0 && py0 < sh {
+                        dst[(py0 * sw + px0) as usize] = rgb;
                     }
-                    let drow = (py * sw) as usize;
-                    for ox in 0..scale {
-                        let px = px0 + ox;
-                        if px >= 0 && px < sw {
-                            dst[drow + px as usize] = rgb;
+                } else {
+                    for oy in 0..scale {
+                        let py = py0 + oy;
+                        if py < 0 || py >= sh {
+                            continue;
+                        }
+                        let drow = (py * sw) as usize;
+                        for ox in 0..scale {
+                            let px = px0 + ox;
+                            if px >= 0 && px < sw {
+                                dst[drow + px as usize] = rgb;
+                            }
                         }
                     }
+                }
+            }
+        }
+    }
+
+    /// Continuous fractional-scale blit for crisp or bilinear-smoothed HD/4K widescreen presentation.
+    /// - `smooth`: when `true`, applies premultiplied-alpha bilinear filtering with anti-aliased edges
+    ///   (ideal for digitized 1994 portraits, actors, and starships on 1080p/1440p/4K screens).
+    /// - `key_black`: when `true`, treats pure `#000000` opaque pixels as transparent (e.g., spotlights).
+    pub fn blit_transformed_f(
+        &self,
+        surface: &mut AdSurface,
+        dx: i32,
+        dy: i32,
+        scale_f: f32,
+        flip_x: bool,
+        flip_y: bool,
+        smooth: bool,
+        key_black: bool,
+    ) {
+        if self.w <= 0 || self.h <= 0 || scale_f <= 0.01 {
+            return;
+        }
+        let dst_w = (self.w as f32 * scale_f).round().max(1.0) as i32;
+        let dst_h = (self.h as f32 * scale_f).round().max(1.0) as i32;
+        self.blit_rect(surface, dx, dy, dst_w, dst_h, flip_x, flip_y, smooth, key_black);
+    }
+
+    /// Blit scaled into an arbitrary destination rectangle `(dx, dy, dst_w, dst_h)`.
+    pub fn blit_rect(
+        &self,
+        surface: &mut AdSurface,
+        dx: i32,
+        dy: i32,
+        dst_w: i32,
+        dst_h: i32,
+        flip_x: bool,
+        flip_y: bool,
+        smooth: bool,
+        key_black: bool,
+    ) {
+        if self.w <= 0 || self.h <= 0 || dst_w <= 0 || dst_h <= 0 {
+            return;
+        }
+        let sw = surface.width;
+        let sh = surface.height;
+        let x0 = dx.max(0);
+        let x1 = (dx + dst_w).min(sw);
+        let y0 = dy.max(0);
+        let y1 = (dy + dst_h).min(sh);
+        if x0 >= x1 || y0 >= y1 {
+            return;
+        }
+
+        let dst = surface.pixels_mut();
+        let src_w = self.w;
+        let src_h = self.h;
+        let is_opaque = |c: u32| -> bool { c != 0 && (!key_black || (c & 0x00FF_FFFF) != 0) };
+
+        if !smooth || (dst_w == src_w && dst_h == src_h) {
+            let inv_x = src_w as f32 / dst_w as f32;
+            let inv_y = src_h as f32 / dst_h as f32;
+            for py in y0..y1 {
+                let mut sy = (((py - dy) as f32 + 0.5) * inv_y) as i32;
+                sy = sy.clamp(0, src_h - 1);
+                if flip_y {
+                    sy = src_h - 1 - sy;
+                }
+                let srow = (sy * src_w) as usize;
+                let drow = (py * sw) as usize;
+                for px in x0..x1 {
+                    let mut sx = (((px - dx) as f32 + 0.5) * inv_x) as i32;
+                    sx = sx.clamp(0, src_w - 1);
+                    if flip_x {
+                        sx = src_w - 1 - sx;
+                    }
+                    let c = self.pixels[srow + sx as usize];
+                    if is_opaque(c) {
+                        dst[drow + px as usize] = c & 0x00FF_FFFF;
+                    }
+                }
+            }
+            return;
+        }
+
+        // Fast 16.16 fixed-point bilinear interpolation with edge-clean coverage alpha!
+        let step_x = ((src_w as f64 / dst_w as f64) * 65536.0) as i64;
+        let step_y = ((src_h as f64 / dst_h as f64) * 65536.0) as i64;
+        let max_sx = src_w - 1;
+        let max_sy = src_h - 1;
+
+        for py in y0..y1 {
+            let fy_raw = (((py - dy) as i64) * step_y + (step_y >> 1)) - 32768;
+            let fy = if flip_y {
+                ((max_sy as i64) << 16) - fy_raw
+            } else {
+                fy_raw
+            }
+            .clamp(0, (max_sy as i64) << 16);
+            let sy0 = (fy >> 16) as i32;
+            let sy1 = (sy0 + 1).min(max_sy);
+            let wy1 = ((fy >> 8) & 0xFF) as u32;
+            let wy0 = 256 - wy1;
+            let row0 = (sy0 * src_w) as usize;
+            let row1 = (sy1 * src_w) as usize;
+            let drow = (py * sw) as usize;
+
+            let mut fx_cur = (((x0 - dx) as i64) * step_x + (step_x >> 1)) - 32768;
+            for px in x0..x1 {
+                let fx = if flip_x {
+                    ((max_sx as i64) << 16) - fx_cur
+                } else {
+                    fx_cur
+                }
+                .clamp(0, (max_sx as i64) << 16);
+                fx_cur += step_x;
+
+                let sx0 = (fx >> 16) as i32;
+                let sx1 = (sx0 + 1).min(max_sx);
+                let wx1 = ((fx >> 8) & 0xFF) as u32;
+                let wx0 = 256 - wx1;
+
+                let c00 = self.pixels[row0 + sx0 as usize];
+                let c10 = self.pixels[row0 + sx1 as usize];
+                let c01 = self.pixels[row1 + sx0 as usize];
+                let c11 = self.pixels[row1 + sx1 as usize];
+
+                let w00 = if is_opaque(c00) { (wx0 * wy0) >> 8 } else { 0 };
+                let w10 = if is_opaque(c10) { (wx1 * wy0) >> 8 } else { 0 };
+                let w01 = if is_opaque(c01) { (wx0 * wy1) >> 8 } else { 0 };
+                let w11 = if is_opaque(c11) { (wx1 * wy1) >> 8 } else { 0 };
+                let a_sum = w00 + w10 + w01 + w11;
+                if a_sum == 0 {
+                    continue;
+                }
+
+                let r = (((c00 >> 16) & 0xFF) * w00
+                    + ((c10 >> 16) & 0xFF) * w10
+                    + ((c01 >> 16) & 0xFF) * w01
+                    + ((c11 >> 16) & 0xFF) * w11)
+                    / a_sum;
+                let g = (((c00 >> 8) & 0xFF) * w00
+                    + ((c10 >> 8) & 0xFF) * w10
+                    + ((c01 >> 8) & 0xFF) * w01
+                    + ((c11 >> 8) & 0xFF) * w11)
+                    / a_sum;
+                let b = ((c00 & 0xFF) * w00
+                    + (c10 & 0xFF) * w10
+                    + (c01 & 0xFF) * w01
+                    + (c11 & 0xFF) * w11)
+                    / a_sum;
+
+                let di = drow + px as usize;
+                if a_sum >= 248 {
+                    dst[di] = (r << 16) | (g << 8) | b;
+                } else {
+                    let bg = dst[di];
+                    let inv_a = 256 - a_sum.min(256);
+                    let or = (r * a_sum + ((bg >> 16) & 0xFF) * inv_a) >> 8;
+                    let og = (g * a_sum + ((bg >> 8) & 0xFF) * inv_a) >> 8;
+                    let ob = (b * a_sum + (bg & 0xFF) * inv_a) >> 8;
+                    dst[di] = (or << 16) | (og << 8) | ob;
+                }
+            }
+        }
+    }
+
+    /// Fractional-scale tinted blit (used for fireworks, colored notes, and illuminated silhouettes).
+    pub fn blit_tinted_f(
+        &self,
+        surface: &mut AdSurface,
+        dx: i32,
+        dy: i32,
+        tint_rgb: u32,
+        scale_f: f32,
+    ) {
+        if self.w <= 0 || self.h <= 0 || scale_f <= 0.01 {
+            return;
+        }
+        let dst_w = (self.w as f32 * scale_f).round().max(1.0) as i32;
+        let dst_h = (self.h as f32 * scale_f).round().max(1.0) as i32;
+        let sw = surface.width;
+        let sh = surface.height;
+        let x0 = dx.max(0);
+        let x1 = (dx + dst_w).min(sw);
+        let y0 = dy.max(0);
+        let y1 = (dy + dst_h).min(sh);
+        if x0 >= x1 || y0 >= y1 {
+            return;
+        }
+        let dst = surface.pixels_mut();
+        let tr = (tint_rgb >> 16) & 0xFF;
+        let tg = (tint_rgb >> 8) & 0xFF;
+        let tb = tint_rgb & 0xFF;
+        let inv_x = self.w as f32 / dst_w as f32;
+        let inv_y = self.h as f32 / dst_h as f32;
+        for py in y0..y1 {
+            let sy = ((((py - dy) as f32 + 0.5) * inv_y) as i32).clamp(0, self.h - 1);
+            let srow = (sy * self.w) as usize;
+            let drow = (py * sw) as usize;
+            for px in x0..x1 {
+                let sx = ((((px - dx) as f32 + 0.5) * inv_x) as i32).clamp(0, self.w - 1);
+                let c = self.pixels[srow + sx as usize];
+                if c == 0 {
+                    continue;
+                }
+                let r = (c >> 16) & 0xFF;
+                let g = (c >> 8) & 0xFF;
+                let b = c & 0xFF;
+                let lum = (r * 3 + g * 6 + b) / 10;
+                dst[drow + px as usize] = if lum < 36 {
+                    c & 0x00FF_FFFF
+                } else {
+                    let nr = ((tr * lum) / 220).min(255);
+                    let ng = ((tg * lum) / 220).min(255);
+                    let nb = ((tb * lum) / 220).min(255);
+                    (nr << 16) | (ng << 8) | nb
+                };
+            }
+        }
+    }
+
+    /// Fractional-scale solid-color glyph blit for crisp high-DPI bitmap typography.
+    pub fn blit_solid_color_f(
+        &self,
+        surface: &mut AdSurface,
+        dx: i32,
+        dy: i32,
+        rgb: u32,
+        scale_f: f32,
+    ) {
+        if self.w <= 0 || self.h <= 0 || scale_f <= 0.01 {
+            return;
+        }
+        let dst_w = (self.w as f32 * scale_f).round().max(1.0) as i32;
+        let dst_h = (self.h as f32 * scale_f).round().max(1.0) as i32;
+        let sw = surface.width;
+        let sh = surface.height;
+        let x0 = dx.max(0);
+        let x1 = (dx + dst_w).min(sw);
+        let y0 = dy.max(0);
+        let y1 = (dy + dst_h).min(sh);
+        if x0 >= x1 || y0 >= y1 {
+            return;
+        }
+        let dst = surface.pixels_mut();
+        let rgb = rgb & 0x00FF_FFFF;
+        let inv_x = self.w as f32 / dst_w as f32;
+        let inv_y = self.h as f32 / dst_h as f32;
+        for py in y0..y1 {
+            let sy = ((((py - dy) as f32 + 0.5) * inv_y) as i32).clamp(0, self.h - 1);
+            let srow = (sy * self.w) as usize;
+            let drow = (py * sw) as usize;
+            for px in x0..x1 {
+                let sx = ((((px - dx) as f32 + 0.5) * inv_x) as i32).clamp(0, self.w - 1);
+                if self.pixels[srow + sx as usize] != 0 {
+                    dst[drow + px as usize] = rgb;
                 }
             }
         }
@@ -524,6 +806,49 @@ impl SpriteFrame {
                 }
                 let px = dx + sx;
                 if px < 0 || px >= bw {
+                    continue;
+                }
+                buf[drow + px as usize] = match tint {
+                    Some(t) => t & 0x00FF_FFFF,
+                    None => c & 0x00FF_FFFF,
+                };
+            }
+        }
+    }
+
+    /// Fractional-scale blit into an offscreen RGB buffer `buf` (`bw x bh`) for crisp HD/4K tiles, bite craters, and graffiti.
+    pub fn blit_into_buf_scaled(
+        &self,
+        buf: &mut [u32],
+        bw: i32,
+        bh: i32,
+        dx: i32,
+        dy: i32,
+        scale_f: f32,
+        tint: Option<u32>,
+    ) {
+        if self.w <= 0 || self.h <= 0 || scale_f <= 0.01 {
+            return;
+        }
+        let dst_w = (self.w as f32 * scale_f).round().max(1.0) as i32;
+        let dst_h = (self.h as f32 * scale_f).round().max(1.0) as i32;
+        let x0 = dx.max(0);
+        let x1 = (dx + dst_w).min(bw);
+        let y0 = dy.max(0);
+        let y1 = (dy + dst_h).min(bh);
+        if x0 >= x1 || y0 >= y1 {
+            return;
+        }
+        let inv_x = self.w as f32 / dst_w as f32;
+        let inv_y = self.h as f32 / dst_h as f32;
+        for py in y0..y1 {
+            let sy = ((((py - dy) as f32 + 0.5) * inv_y) as i32).clamp(0, self.h - 1);
+            let srow = (sy * self.w) as usize;
+            let drow = (py * bw) as usize;
+            for px in x0..x1 {
+                let sx = ((((px - dx) as f32 + 0.5) * inv_x) as i32).clamp(0, self.w - 1);
+                let c = self.pixels[srow + sx as usize];
+                if c == 0 {
                     continue;
                 }
                 buf[drow + px as usize] = match tint {
@@ -986,15 +1311,79 @@ impl CompoundAnim {
         let oy = if apply_delta { y + cf.dy * scale } else { y };
         for part in &cf.parts {
             if let Some(sp) = self.sprites.get(part.sprite_idx) {
+                let p_flip_x = ((part.flags & 1) != 0) ^ flip_x;
+                let p_flip_y = (part.flags & 2) != 0;
                 if flip_x {
                     let rel_x = fw - (part.left - cf.left) - sp.w;
                     let rel_y = part.top - cf.top;
-                    sp.blit_flipped_x(surface, ox + rel_x * scale, oy + rel_y * scale, scale);
+                    sp.blit_transformed(
+                        surface,
+                        ox + rel_x * scale,
+                        oy + rel_y * scale,
+                        scale,
+                        p_flip_x,
+                        p_flip_y,
+                    );
                 } else {
                     let rel_x = part.left - cf.left;
                     let rel_y = part.top - cf.top;
-                    sp.blit_scaled(surface, ox + rel_x * scale, oy + rel_y * scale, scale);
+                    sp.blit_transformed(
+                        surface,
+                        ox + rel_x * scale,
+                        oy + rel_y * scale,
+                        scale,
+                        p_flip_x,
+                        p_flip_y,
+                    );
                 }
+            }
+        }
+    }
+
+    /// Continuous fractional-scale compound frame draw aligned at bbox top-left `(x, y)`.
+    pub fn draw_frame_f(
+        &self,
+        surface: &mut AdSurface,
+        idx: usize,
+        x: i32,
+        y: i32,
+        scale_f: f32,
+        flip_x: bool,
+        smooth: bool,
+        key_black: bool,
+    ) {
+        let Some(cf) = self.frames.get(idx) else {
+            return;
+        };
+        if scale_f <= 0.01 {
+            return;
+        }
+        let fw = cf.right - cf.left;
+        for part in &cf.parts {
+            if let Some(sp) = self.sprites.get(part.sprite_idx) {
+                let p_flip_x = ((part.flags & 1) != 0) ^ flip_x;
+                let p_flip_y = (part.flags & 2) != 0;
+                let rel_x = if flip_x {
+                    fw - (part.left - cf.left) - sp.w
+                } else {
+                    part.left - cf.left
+                };
+                let rel_y = part.top - cf.top;
+                let dx0 = x + (rel_x as f32 * scale_f).round() as i32;
+                let dy0 = y + (rel_y as f32 * scale_f).round() as i32;
+                let dx1 = x + ((rel_x + sp.w) as f32 * scale_f).round() as i32;
+                let dy1 = y + ((rel_y + sp.h) as f32 * scale_f).round() as i32;
+                sp.blit_rect(
+                    surface,
+                    dx0,
+                    dy0,
+                    (dx1 - dx0).max(1),
+                    (dy1 - dy0).max(1),
+                    p_flip_x,
+                    p_flip_y,
+                    smooth,
+                    key_black,
+                );
             }
         }
     }
@@ -1016,7 +1405,127 @@ impl CompoundAnim {
             if let Some(sp) = self.sprites.get(part.sprite_idx) {
                 let px = stage_x + (part.left + cf.dx) * scale;
                 let py = stage_y + (part.top + cf.dy) * scale;
-                sp.blit_scaled(surface, px, py, scale);
+                let p_flip_x = (part.flags & 1) != 0;
+                let p_flip_y = (part.flags & 2) != 0;
+                sp.blit_transformed(surface, px, py, scale, p_flip_x, p_flip_y);
+            }
+        }
+    }
+
+    /// Seam-free continuous fractional-scale stage draw (respects `OFtb` `flip_x` & `flip_y` part flags).
+    pub fn draw_stage_frame_f(
+        &self,
+        surface: &mut AdSurface,
+        idx: usize,
+        stage_x: f32,
+        stage_y: f32,
+        scale_f: f32,
+        smooth: bool,
+        key_black: bool,
+    ) {
+        self.draw_stage_frame_f_ex(
+            surface, idx, stage_x, stage_y, scale_f, smooth, key_black, None, false,
+        );
+    }
+
+    /// Extended stage-coordinate compound frame draw supporting optional black-matte sprite skipping
+    /// and horizontal mirroring about `stage_x` (unused when `mirror_x == false`).
+    pub fn draw_stage_frame_f_ex(
+        &self,
+        surface: &mut AdSurface,
+        idx: usize,
+        stage_x: f32,
+        stage_y: f32,
+        scale_f: f32,
+        smooth: bool,
+        key_black: bool,
+        skip_sprite: Option<usize>,
+        ignore_dx_dy: bool,
+    ) {
+        let Some(cf) = self.frames.get(idx) else {
+            return;
+        };
+        if scale_f <= 0.01 {
+            return;
+        }
+        let fdx = if ignore_dx_dy { 0 } else { cf.dx };
+        let fdy = if ignore_dx_dy { 0 } else { cf.dy };
+        for part in &cf.parts {
+            if skip_sprite == Some(part.sprite_idx) {
+                continue;
+            }
+            if let Some(sp) = self.sprites.get(part.sprite_idx) {
+                let sx = part.left + fdx;
+                let sy = part.top + fdy;
+                let dx0 = (stage_x + sx as f32 * scale_f).round() as i32;
+                let dy0 = (stage_y + sy as f32 * scale_f).round() as i32;
+                let dx1 = (stage_x + (sx + sp.w) as f32 * scale_f).round() as i32;
+                let dy1 = (stage_y + (sy + sp.h) as f32 * scale_f).round() as i32;
+                let p_flip_x = (part.flags & 1) != 0;
+                let p_flip_y = (part.flags & 2) != 0;
+                sp.blit_rect(
+                    surface,
+                    dx0,
+                    dy0,
+                    (dx1 - dx0).max(1),
+                    (dy1 - dy0).max(1),
+                    p_flip_x,
+                    p_flip_y,
+                    smooth,
+                    key_black,
+                );
+            }
+        }
+    }
+
+    /// Stage-anchored walk/action frame draw anchored to a reference stage origin `(ref_x, ref_y)`,
+    /// preserving authentic per-frame stage motion `(part.left + cf.dx - ref_x, part.top + cf.dy - ref_y)`
+    /// without foot-slipping or horizontal bounding-box jitter! Supports horizontal flipping about `ref_x`.
+    pub fn draw_cycle_frame_f(
+        &self,
+        surface: &mut AdSurface,
+        idx: usize,
+        anchor_x: f32,
+        anchor_y: f32,
+        ref_x: i32,
+        ref_y: i32,
+        scale_f: f32,
+        flip_x: bool,
+        smooth: bool,
+    ) {
+        let Some(cf) = self.frames.get(idx) else {
+            return;
+        };
+        if scale_f <= 0.01 {
+            return;
+        }
+        for part in &cf.parts {
+            if let Some(sp) = self.sprites.get(part.sprite_idx) {
+                let p_flip_x = ((part.flags & 1) != 0) ^ flip_x;
+                let p_flip_y = (part.flags & 2) != 0;
+                let stage_l = part.left + cf.dx;
+                let stage_t = part.top + cf.dy;
+                let rel_x = if flip_x {
+                    (ref_x - stage_l) - sp.w
+                } else {
+                    stage_l - ref_x
+                };
+                let rel_y = stage_t - ref_y;
+                let dx0 = (anchor_x + rel_x as f32 * scale_f).round() as i32;
+                let dy0 = (anchor_y + rel_y as f32 * scale_f).round() as i32;
+                let dx1 = (anchor_x + (rel_x + sp.w) as f32 * scale_f).round() as i32;
+                let dy1 = (anchor_y + (rel_y + sp.h) as f32 * scale_f).round() as i32;
+                sp.blit_rect(
+                    surface,
+                    dx0,
+                    dy0,
+                    (dx1 - dx0).max(1),
+                    (dy1 - dy0).max(1),
+                    p_flip_x,
+                    p_flip_y,
+                    smooth,
+                    false,
+                );
             }
         }
     }
@@ -1037,6 +1546,35 @@ impl CompoundAnim {
         let fw = (cf.right - cf.left).max(1) * scale;
         let fh = (cf.bottom - cf.top).max(1) * scale;
         self.draw_frame(surface, idx, cx - fw / 2, bottom_y - fh, scale, flip_x, false);
+    }
+
+    /// Continuous fractional-scale bottom-center anchored draw.
+    pub fn draw_anchored_bottom_f(
+        &self,
+        surface: &mut AdSurface,
+        idx: usize,
+        cx: i32,
+        bottom_y: i32,
+        scale_f: f32,
+        flip_x: bool,
+        smooth: bool,
+        key_black: bool,
+    ) {
+        let Some(cf) = self.frames.get(idx) else {
+            return;
+        };
+        let fw = ((cf.right - cf.left).max(1) as f32 * scale_f).round() as i32;
+        let fh = ((cf.bottom - cf.top).max(1) as f32 * scale_f).round() as i32;
+        self.draw_frame_f(
+            surface,
+            idx,
+            cx - fw / 2,
+            bottom_y - fh,
+            scale_f,
+            flip_x,
+            smooth,
+            key_black,
+        );
     }
 
     pub fn index_of_fid(&self, fid: u16) -> Option<usize> {
@@ -1335,6 +1873,95 @@ pub fn wrap_bitmap_text(font: &RlepBank, text: &str, max_width: i32, scale: i32)
             format!("{} {}", cur, word)
         };
         if !cur.is_empty() && measure_bitmap_text(font, &cand, scale) > max_width {
+            lines.push(cur);
+            cur = word.to_string();
+        } else {
+            cur = cand;
+        }
+    }
+    if !cur.is_empty() {
+        lines.push(cur);
+    }
+    lines
+}
+
+/// Fractional-scale bitmap text draw (94-glyph ASCII 33..=126 Simpsons/TNG fonts).
+pub fn draw_bitmap_text_f(
+    surface: &mut AdSurface,
+    font: &RlepBank,
+    text: &str,
+    x: i32,
+    y: i32,
+    color_override: Option<u32>,
+    scale_f: f32,
+) -> i32 {
+    let scale_f = scale_f.max(0.25);
+    let space_w = font.frames.first().map(|f| f.w.max(4)).unwrap_or(6) as f32 * scale_f;
+    let mut cx = x as f32;
+    for ch in text.chars() {
+        let code = ch as u32;
+        if code == 32 {
+            cx += space_w;
+            continue;
+        }
+        if (33..=126).contains(&code) {
+            let idx = (code - 33) as usize;
+            if let Some(glyph) = font.frames.get(idx) {
+                match color_override {
+                    Some(c) => glyph.blit_solid_color_f(surface, cx.round() as i32, y, c, scale_f),
+                    None => glyph.blit_transformed_f(
+                        surface,
+                        cx.round() as i32,
+                        y,
+                        scale_f,
+                        false,
+                        false,
+                        false,
+                        false,
+                    ),
+                }
+                cx += (glyph.w + 1) as f32 * scale_f;
+            } else {
+                cx += space_w;
+            }
+        } else {
+            cx += space_w;
+        }
+    }
+    (cx.round() as i32) - x
+}
+
+pub fn measure_bitmap_text_f(font: &RlepBank, text: &str, scale_f: f32) -> i32 {
+    let scale_f = scale_f.max(0.25);
+    let space_w = font.frames.first().map(|f| f.w.max(4)).unwrap_or(6) as f32 * scale_f;
+    let mut w = 0.0f32;
+    for ch in text.chars() {
+        let code = ch as u32;
+        if code == 32 {
+            w += space_w;
+        } else if (33..=126).contains(&code) {
+            if let Some(glyph) = font.frames.get((code - 33) as usize) {
+                w += (glyph.w + 1) as f32 * scale_f;
+            } else {
+                w += space_w;
+            }
+        } else {
+            w += space_w;
+        }
+    }
+    w.round() as i32
+}
+
+pub fn wrap_bitmap_text_f(font: &RlepBank, text: &str, max_width: i32, scale_f: f32) -> Vec<String> {
+    let mut lines = Vec::new();
+    let mut cur = String::new();
+    for word in text.split_whitespace() {
+        let cand = if cur.is_empty() {
+            word.to_string()
+        } else {
+            format!("{} {}", cur, word)
+        };
+        if !cur.is_empty() && measure_bitmap_text_f(font, &cand, scale_f) > max_width {
             lines.push(cur);
             cur = word.to_string();
         } else {

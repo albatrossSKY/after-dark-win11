@@ -43,7 +43,7 @@ pub struct SimpsonsPhysicsModule {
     bodies: Vec<Body>,
     bg_heads: Vec<BgHead>,
     tick: usize,
-    scale: i32,
+    scale_f: f32,
 }
 
 impl SimpsonsPhysicsModule {
@@ -57,7 +57,7 @@ impl SimpsonsPhysicsModule {
             bodies: Vec::new(),
             bg_heads: Vec::new(),
             tick: 0,
-            scale: 1,
+            scale_f: 1.5,
         }
     }
 
@@ -135,34 +135,50 @@ impl SimpsonsPhysicsModule {
         if !self.chars.is_empty() {
             return;
         }
-        // RLEP #5000..#5080 each hold 2 characters (~half frames each), #5090 holds 1 = 19 total!
-        let mut all_chars = Vec::new();
+        // Verified exact 19 Springfield character frame slices across RLEP #5000..#5090
+        // (matching the Character 1 / Character 2 dropdown alphabetical order 1:1):
+        const CHAR_SLICES: &[(i16, usize, usize)] = &[
+            (5000, 0, 10),  // 0: Barney
+            (5000, 10, 29), // 1: Bart
+            (5010, 0, 14),  // 2: Burns
+            (5010, 14, 23), // 3: Edna
+            (5020, 0, 10),  // 4: Grampa
+            (5020, 10, 28), // 5: Homer
+            (5030, 0, 14),  // 6: Lisa
+            (5030, 14, 23), // 7: Maggie
+            (5040, 0, 19),  // 8: Marge
+            (5040, 19, 29), // 9: Maude
+            (5050, 0, 8),   // 10: Milhouse
+            (5050, 8, 17),  // 11: Ned
+            (5060, 0, 8),   // 12: Nelson
+            (5060, 8, 15),  // 13: Otto
+            (5070, 0, 15),  // 14: Patty
+            (5070, 15, 24), // 15: Ralph
+            (5080, 0, 15),  // 16: Selma
+            (5080, 15, 28), // 17: Skinner
+            (5090, 0, 13),  // 18: Smithers
+        ];
+        let mut cached_banks: Vec<(i16, RlepBank)> = Vec::new();
         for bank_idx in 0..10 {
             let rid = 5000 + bank_idx * 10;
-            let bank = RlepBank::load(MOD_PHYSICS, rid);
-            let n = bank.frames.len();
-            if bank_idx < 9 && n >= 8 {
-                let mid = n / 2;
-                let mut iter = bank.frames.into_iter();
-                let first: Vec<SpriteFrame> = iter.by_ref().take(mid).collect();
-                let second: Vec<SpriteFrame> = iter.collect();
-                let g1 = (all_chars.len() as i32) % 4;
-                all_chars.push(CharHeadFrames {
-                    frames: first,
-                    group: g1,
-                });
-                let g2 = (all_chars.len() as i32) % 4;
-                all_chars.push(CharHeadFrames {
-                    frames: second,
-                    group: g2,
-                });
-            } else if n > 0 {
-                let g = (all_chars.len() as i32) % 4;
-                all_chars.push(CharHeadFrames {
-                    frames: bank.frames,
-                    group: g,
-                });
-            }
+            cached_banks.push((rid, RlepBank::load(MOD_PHYSICS, rid)));
+        }
+
+        let mut all_chars = Vec::with_capacity(CHAR_SLICES.len());
+        for (idx, &(rid, start, end)) in CHAR_SLICES.iter().enumerate() {
+            let frames = cached_banks
+                .iter()
+                .find(|(id, _)| *id == rid)
+                .map(|(_, b)| {
+                    let s = start.min(b.frames.len());
+                    let e = end.min(b.frames.len());
+                    b.frames[s..e].to_vec()
+                })
+                .unwrap_or_default();
+            all_chars.push(CharHeadFrames {
+                frames,
+                group: (idx as i32) % 4,
+            });
         }
         self.chars = all_chars;
         self.bg_bank = RlepBank::load(MOD_PHYSICS, 5500);
@@ -199,7 +215,7 @@ impl AdModule for SimpsonsPhysicsModule {
         self.ensure_loaded();
         let w = ctx.surface.width.max(120) as f32;
         let h = ctx.surface.height.max(100) as f32;
-        self.scale = if ctx.surface.width >= 1000 { 2 } else { 1 };
+        self.scale_f = (h / 400.0).clamp(1.15, 4.0);
         self.tick = 0;
 
         let count_raw = ctx.module.raw_control_value[0].clamp(0, 100);
@@ -234,12 +250,12 @@ impl AdModule for SimpsonsPhysicsModule {
                 .chars
                 .get(ci)
                 .and_then(|c| c.frames.first())
-                .map(|f| (f.w.max(f.h) as f32 * 0.45) * self.scale as f32)
-                .unwrap_or(18.0 * self.scale as f32);
+                .map(|f| (f.w.max(f.h) as f32 * 0.45) * self.scale_f)
+                .unwrap_or(18.0 * self.scale_f);
             let x = radius + ctx.rng.rand_mod((w - radius * 2.0).max(10.0) as i32) as f32;
             let y = radius + ctx.rng.rand_mod((h - radius * 2.0).max(10.0) as i32) as f32;
-            let vx = ((ctx.rng.rand_mod(61) - 30) as f32) * 0.14 * self.scale as f32;
-            let vy = ((ctx.rng.rand_mod(61) - 30) as f32) * 0.14 * self.scale as f32;
+            let vx = ((ctx.rng.rand_mod(61) - 30) as f32) * 0.14 * self.scale_f;
+            let vy = ((ctx.rng.rand_mod(61) - 30) as f32) * 0.14 * self.scale_f;
             self.bodies.push(Body {
                 char_idx: ci,
                 x,
@@ -260,8 +276,8 @@ impl AdModule for SimpsonsPhysicsModule {
                     sprite_idx: ctx.rng.rand_mod(bg_avail as i32) as usize,
                     x: ctx.rng.rand_mod(w as i32) as f32,
                     y: ctx.rng.rand_mod(h as i32) as f32,
-                    vx: ((ctx.rng.rand_mod(21) - 10) as f32) * 0.12,
-                    vy: ((ctx.rng.rand_mod(21) - 10) as f32) * 0.12,
+                    vx: ((ctx.rng.rand_mod(21) - 10) as f32) * 0.12 * self.scale_f,
+                    vy: ((ctx.rng.rand_mod(21) - 10) as f32) * 0.12 * self.scale_f,
                 });
             }
         }
@@ -285,23 +301,46 @@ impl AdModule for SimpsonsPhysicsModule {
         self.tick = self.tick.wrapping_add(1);
         let w = ctx.surface.width as f32;
         let h = ctx.surface.height as f32;
-        let s = self.scale;
+        let sf = self.scale_f;
         let pack = SimpsonsPack::global();
 
-        fill_rect_px(ctx.surface, 0, 0, ctx.surface.width, ctx.surface.height, 0x0006_0812);
+        // Deep indigo-slate physics chamber gradient with subtle blueprint grid
+        {
+            let iw = ctx.surface.width;
+            let ih = ctx.surface.height;
+            let gstep = (44.0 * sf).round().max(24.0) as i32;
+            let dst = ctx.surface.pixels_mut();
+            for y in 0..ih {
+                let row = (y * iw) as usize;
+                let yt = y as f32 / ih.max(1) as f32;
+                let base_r = (8.0 + yt * 8.0) as u32;
+                let base_g = (12.0 + yt * 10.0) as u32;
+                let base_b = (24.0 + yt * 18.0) as u32;
+                let gy_line = (y % gstep) == 0;
+                for x in 0..iw {
+                    let grid = gy_line || (x % gstep) == 0;
+                    let col = if grid {
+                        ((base_r + 6) << 16) | ((base_g + 10) << 8) | (base_b + 16)
+                    } else {
+                        (base_r << 16) | (base_g << 8) | base_b
+                    };
+                    dst[row + x as usize] = col;
+                }
+            }
+        }
 
         // Update & draw dimmed background heads (#5500)
         for bg in &mut self.bg_heads {
             bg.x += bg.vx;
             bg.y += bg.vy;
-            if bg.x < 0.0 || bg.x > w - 32.0 {
+            if bg.x < 0.0 || bg.x > w - 40.0 * sf {
                 bg.vx = -bg.vx;
             }
-            if bg.y < 0.0 || bg.y > h - 32.0 {
+            if bg.y < 0.0 || bg.y > h - 40.0 * sf {
                 bg.vy = -bg.vy;
             }
             if let Some(sp) = self.bg_bank.frames.get(bg.sprite_idx) {
-                sp.blit_scaled(ctx.surface, bg.x as i32, bg.y as i32, s);
+                sp.blit_transformed_f(ctx.surface, bg.x as i32, bg.y as i32, sf, false, false, true, false);
             }
         }
 
@@ -341,9 +380,9 @@ impl AdModule for SimpsonsPhysicsModule {
                             collide_sound = true;
                         }
                     }
-                } else if dist < 260.0 * s as f32 {
+                } else if dist < 260.0 * sf {
                     let sign = self.pair_force_sign(self.bodies[i].char_idx, self.bodies[j].char_idx);
-                    let f = (sign * 22.0 * s as f32) / (dist_sq + 400.0);
+                    let f = (sign * 22.0 * sf) / (dist_sq + 400.0);
                     let fx = (dx / dist) * f;
                     let fy = (dy / dist) * f;
                     self.bodies[i].vx += fx;
@@ -368,16 +407,16 @@ impl AdModule for SimpsonsPhysicsModule {
         }
 
         // Integrate velocities, bounce off screen edges, and draw animated heads!
-        let max_v = 7.2 * s as f32;
+        let max_v = 7.2 * sf;
         for b in &mut self.bodies {
             let spd = (b.vx * b.vx + b.vy * b.vy).sqrt();
             if spd > max_v {
                 b.vx = (b.vx / spd) * max_v;
                 b.vy = (b.vy / spd) * max_v;
-            } else if spd < 0.8 * s as f32 {
+            } else if spd < 0.8 * sf {
                 // Keep heads lively
-                b.vx += ((ctx.rng.rand_mod(11) - 5) as f32) * 0.12;
-                b.vy += ((ctx.rng.rand_mod(11) - 5) as f32) * 0.12;
+                b.vx += ((ctx.rng.rand_mod(11) - 5) as f32) * 0.12 * sf;
+                b.vy += ((ctx.rng.rand_mod(11) - 5) as f32) * 0.12 * sf;
             }
 
             b.x += b.vx;
@@ -402,23 +441,42 @@ impl AdModule for SimpsonsPhysicsModule {
 
             if let Some(ch) = self.chars.get(b.char_idx) {
                 if !ch.frames.is_empty() {
-                    // Pick expressive turning/reacting frame based on velocity angle + bounce
-                    let fi = if b.hit_flash > 0 {
-                        (ch.frames.len() - 1).min(ch.frames.len() / 2 + b.hit_flash)
+                    let n = ch.frames.len();
+                    let calm_n = ((n * 2) / 3).max(1);
+                    // Smooth ping-pong head turning during flight; expressive reaction on bounce!
+                    let fi = if b.hit_flash > 0 && n > calm_n {
+                        calm_n + (b.hit_flash % (n - calm_n))
+                    } else if calm_n <= 1 {
+                        0
                     } else {
-                        (self.tick / 5 + b.frame_phase) % ch.frames.len()
+                        let span = (calm_n - 1) * 2;
+                        let p = (self.tick / 4 + b.frame_phase) % span;
+                        if p < calm_n { p } else { span - p }
                     };
-                    let sp = &ch.frames[fi];
-                    let dx = b.x as i32 - (sp.w * s) / 2;
-                    let dy = b.y as i32 - (sp.h * s) / 2;
+                    let sp = &ch.frames[fi.min(n - 1)];
+                    let sw_px = (sp.w as f32 * sf).round() as i32;
+                    let sh_px = (sp.h as f32 * sf).round() as i32;
+                    let dx = b.x as i32 - sw_px / 2;
+                    let dy = b.y as i32 - sh_px / 2;
                     if b.hit_flash > 3 {
-                        fill_circle_px(ctx.surface, b.x as i32, b.y as i32, (b.radius * 0.7) as i32, 0x00FF_E848);
+                        fill_circle_px(
+                            ctx.surface,
+                            b.x as i32,
+                            b.y as i32,
+                            (b.radius * 0.72) as i32,
+                            0x00FF_E848,
+                        );
                     }
-                    if b.vx < -0.5 {
-                        sp.blit_flipped_x(ctx.surface, dx, dy, s);
-                    } else {
-                        sp.blit_scaled(ctx.surface, dx, dy, s);
-                    }
+                    sp.blit_transformed_f(
+                        ctx.surface,
+                        dx,
+                        dy,
+                        sf,
+                        b.vx < -0.5,
+                        false,
+                        true,
+                        false,
+                    );
                 }
             }
         }

@@ -114,9 +114,10 @@ impl GraphStatModule {
     fn draw_graph_paper_and_labels(&self, ctx: &mut AdContext<'_>) {
         let w = ctx.module.rgn_width.max(64);
         let h = ctx.module.rgn_height.max(64);
+        let sf = (h as f32 / 480.0).clamp(0.85, 4.0);
         ctx.surface.fill_black();
 
-        let grid_step = (Self::srand_centered(ctx) % 30 + 50).max(16);
+        let grid_step = (((Self::srand_centered(ctx) % 30 + 50).max(16) as f32) * sf).round() as i32;
         let green_pen = if ctx.system.bits_per_pixel < 4 {
             rgb(255, 255, 255)
         } else {
@@ -219,7 +220,7 @@ impl GraphStatModule {
             let s2 = &self.sections[2]
                 [(Self::srand_centered(ctx).abs() as usize) % self.sections[2].len()];
             let title = format!("{s0} {s1} {s2}");
-            let title_h = if h < 400 { 18 } else { 24 };
+            let title_h = ((if h < 400 { 18.0 } else { 26.0 }) * sf).round() as i32;
             let white = rgb(255, 255, 255);
             let rc = RECT {
                 left: tx,
@@ -233,10 +234,10 @@ impl GraphStatModule {
             if !self.sections[3].is_empty() && Self::srand_centered(ctx) % 2 == 0 {
                 let s3 = &self.sections[3]
                     [(Self::srand_centered(ctx).abs() as usize) % self.sections[3].len()];
-                let sub_h = if h < 400 { 12 } else { 18 };
+                let sub_h = ((if h < 400 { 12.0 } else { 19.0 }) * sf).round() as i32;
                 let sub_rc = RECT {
-                    left: tx + 20,
-                    top: ty + 30,
+                    left: tx + (20.0 * sf) as i32,
+                    top: ty + title_h + (6.0 * sf) as i32,
                     right: w,
                     bottom: h,
                 };
@@ -327,7 +328,9 @@ impl GraphStatModule {
                             .any(|dx| ctx.surface.get_pixel(x_px + dx, y_px) != 0)
                     };
                     if clear {
-                        let rad = (Self::srand_centered(ctx) % 10 + 30).max(16);
+                        let sf = (h as f32 / 480.0).clamp(0.85, 4.0);
+                        let pen_w = (2.0 * sf).round().max(2.0) as i32;
+                        let rad = (((Self::srand_centered(ctx) % 10 + 30).max(16) as f32) * sf).round() as i32;
                         let left = x_px - rad + 2;
                         let top = y_px - rad + 2;
                         ctx.surface.ellipse_pen_width(
@@ -335,7 +338,7 @@ impl GraphStatModule {
                             top,
                             left + rad * 2,
                             top + rad * 2,
-                            2,
+                            pen_w,
                             Some(white),
                             None,
                         );
@@ -344,7 +347,8 @@ impl GraphStatModule {
                 }
             }
 
-            ctx.surface.line(prev_x, prev_y, x_px, y_px, 2, white);
+            let line_w = ((h as f32 / 480.0).clamp(1.0, 4.0) * 2.0).round() as i32;
+            ctx.surface.line(prev_x, prev_y, x_px, y_px, line_w, white);
             prev_x = x_px;
             prev_y = y_px;
         }

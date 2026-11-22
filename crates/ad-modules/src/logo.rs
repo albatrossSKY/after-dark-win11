@@ -132,20 +132,16 @@ impl LogoModule {
             }
         };
 
-        // Original requires bitmap <= screen - 100px; scale cleanly down only if larger than 75% of region
-        let max_w = ((ctx.module.rgn_width * 3) / 4).max(16);
-        let max_h = ((ctx.module.rgn_height * 3) / 4).max(16);
-        let (dst_w, dst_h) = if bmp.width > max_w || bmp.height > max_h {
-            let sx = max_w as f64 / bmp.width.max(1) as f64;
-            let sy = max_h as f64 / bmp.height.max(1) as f64;
-            let scale = sx.min(sy).min(1.0);
-            (
-                ((bmp.width as f64 * scale) as i32).max(1),
-                ((bmp.height as f64 * scale) as i32).max(1),
-            )
-        } else {
-            (bmp.width, bmp.height)
-        };
+        // Scale proportionally for modern HD/4K displays (1:1 at 480p, scaled up cleanly on 720p/1080p/4K,
+        // and shrunk down cleanly if larger than 72% of viewport!).
+        let sf = (ctx.module.rgn_height as f64 / 480.0).clamp(1.0, 4.0);
+        let max_w = ((ctx.module.rgn_width * 72) / 100).max(16);
+        let max_h = ((ctx.module.rgn_height * 72) / 100).max(16);
+        let sx = max_w as f64 / bmp.width.max(1) as f64;
+        let sy = max_h as f64 / bmp.height.max(1) as f64;
+        let scale = sf.min(sx).min(sy);
+        let dst_w = ((bmp.width as f64 * scale).round() as i32).max(1);
+        let dst_h = ((bmp.height as f64 * scale).round() as i32).max(1);
 
         if let Some(mut surf) = AdSurface::new(dst_w, dst_h) {
             if dst_w == bmp.width && dst_h == bmp.height {

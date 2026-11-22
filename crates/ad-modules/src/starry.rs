@@ -145,11 +145,13 @@ impl StarryNightModule {
         self.buildings.reserve(self.n_buildings.max(0) as usize);
 
         let left_range = (w - 20).max(1);
+        let sf = (h as f32 / 480.0).clamp(1.0, 4.0);
         for _ in 0..self.n_buildings.max(0) {
-            let top = h - ctx.rng.rand_mod(sky_h) - 10;
+            let top = h - ctx.rng.rand_mod(sky_h) - (10.0 * sf) as i32;
             let bottom = h;
             let left = ctx.rng.rand_mod(left_range);
-            let right = left + ctx.rng.rand_mod(10) + 14;
+            let b_w = ((ctx.rng.rand_mod(10) + 14) as f32 * sf).round() as i32;
+            let right = left + b_w;
 
             if top < self.tallest_y {
                 self.tallest_y = top;
@@ -179,6 +181,15 @@ impl StarryNightModule {
             .unwrap_or(false)
     }
 
+    #[inline]
+    fn pixel_scale(h: i32) -> i32 {
+        if h >= 520 {
+            ((h as f32 / 420.0).round() as i32).clamp(2, 4)
+        } else {
+            1
+        }
+    }
+
     fn draw_star(&mut self, ctx: &mut AdContext<'_>) {
         let w = ctx.module.rgn_width.max(1);
         let h = ctx.module.rgn_height.max(1);
@@ -205,35 +216,44 @@ impl StarryNightModule {
         };
 
         if !self.in_buildings(x, y) && ctx.rng.rand_mod(h) > y {
-            ctx.surface.set_pixel(x, y, color);
+            let ps = Self::pixel_scale(h);
+            if ps == 1 {
+                ctx.surface.set_pixel(x, y, color);
+            } else {
+                ctx.surface.fill_rect_rgb(x, y, x + ps, y + ps, color);
+            }
         }
     }
 
     fn erase_stars(&mut self, ctx: &mut AdContext<'_>) {
         let w = ctx.module.rgn_width.max(1);
         let h = ctx.module.rgn_height.max(1);
+        let ps = Self::pixel_scale(h) * 2;
         let black = rgb(0, 0, 0);
         for _ in 0..9 {
             let x = ctx.rng.rand_mod(w);
             let y = ctx.rng.rand_mod(h);
-            ctx.surface.fill_rect_rgb(x, y, x + 2, y + 2, black);
+            ctx.surface.fill_rect_rgb(x, y, x + ps, y + ps, black);
         }
     }
 
     fn draw_building_lights(&mut self, ctx: &mut AdContext<'_>) {
         let w = ctx.module.rgn_width.max(1);
         let h = ctx.module.rgn_height.max(1);
-        let light_range = (self.skyline_height + 10).max(1);
+        let ps = Self::pixel_scale(h);
+        let light_range = (self.skyline_height + 10 * ps).max(1);
         let yellow = rgb(255, 255, 0);
 
-        for _ in 0..20 {
+        for _ in 0..(20 * ps) {
             let x = ctx.rng.rand_mod(w);
             let y = h - ctx.rng.rand_mod(light_range);
 
             for b in &self.buildings {
                 if b.contains(x, y) {
-                    let x_bit = 1u8 << (x & 7);
-                    let y_bit = 1u8 << (y & 7);
+                    let gx = x / ps;
+                    let gy = y / ps;
+                    let x_bit = 1u8 << (gx & 7);
+                    let y_bit = 1u8 << (gy & 7);
                     let (x_mask, y_mask): (u8, u8) = match b.style {
                         0 => (0x6C, 0x30),
                         1 => (0xA8, 0x81),
@@ -241,8 +261,14 @@ impl StarryNightModule {
                         3 => (0xA8, 0xF0),
                         _ => (0xCC, 0xCC),
                     };
-                    if (x_mask & x_bit) != 0 && (y_mask & y_bit) != 0 && x > 8 {
-                        ctx.surface.set_pixel(x, y, yellow);
+                    if (x_mask & x_bit) != 0 && (y_mask & y_bit) != 0 && x > 8 * ps {
+                        if ps == 1 {
+                            ctx.surface.set_pixel(x, y, yellow);
+                        } else {
+                            let sx = gx * ps;
+                            let sy = gy * ps;
+                            ctx.surface.fill_rect_rgb(sx, sy, sx + ps, sy + ps, yellow);
+                        }
                     }
                     break;
                 }
@@ -268,10 +294,11 @@ impl StarryNightModule {
         } else {
             rgb(0, 0, 0)
         };
+        let ps = Self::pixel_scale(ctx.module.rgn_height);
         ctx.surface.ellipse(
-            self.tallest_x - 2,
-            self.tallest_y - 5,
-            self.tallest_x + 3,
+            self.tallest_x - 2 * ps,
+            self.tallest_y - 5 * ps,
+            self.tallest_x + 3 * ps,
             self.tallest_y,
             None,
             Some(color),
@@ -282,6 +309,7 @@ impl StarryNightModule {
     fn step_meteor(&mut self, ctx: &mut AdContext<'_>) {
         let w = ctx.module.rgn_width.max(1);
         let h = ctx.module.rgn_height.max(1);
+        let ps = Self::pixel_scale(h);
         let black = rgb(0, 0, 0);
         let meteor_color = if ctx.system.bits_per_pixel >= 3 {
             rgb(255, 0, 0)
@@ -290,14 +318,14 @@ impl StarryNightModule {
         };
 
         if let Some(mut m) = self.active_meteor.take() {
-            // Erase previous bright segment (also carves a 2px black trail through stars, matching 1991 GDI)
+            // Erase previous bright segment (also carves a black trail through stars, matching 1991 GDI)
             if let Some((x1, y1, x2, y2)) = m.prev_seg {
-                ctx.surface.line(x1, y1, x2, y2, 2, black);
+                ctx.surface.line(x1, y1, x2, y2, 2 * ps, black);
             }
             if m.y < h - self.skyline_height - 5 && m.x > 4 && m.x < w {
                 let nx = m.x - m.dx;
-                let ny = m.y + 8;
-                ctx.surface.line(m.x, m.y, nx, ny, 2, meteor_color);
+                let ny = m.y + 8 * ps;
+                ctx.surface.line(m.x, m.y, nx, ny, 2 * ps, meteor_color);
                 m.prev_seg = Some((m.x, m.y, nx, ny));
                 m.x = nx;
                 m.y = ny;
@@ -316,10 +344,10 @@ impl StarryNightModule {
         }
         let x = ctx.rng.rand_mod(w);
         let y = ctx.rng.rand_mod(max_y);
-        let dx = if ctx.rng.rand_mod(100) < 50 { 12 } else { -12 };
+        let dx = if ctx.rng.rand_mod(100) < 50 { 12 * ps } else { -12 * ps };
         let nx = x - dx;
-        let ny = y + 8;
-        ctx.surface.line(x, y, nx, ny, 2, meteor_color);
+        let ny = y + 8 * ps;
+        ctx.surface.line(x, y, nx, ny, 2 * ps, meteor_color);
         self.active_meteor = Some(ActiveMeteor {
             x: nx,
             y: ny,
@@ -334,6 +362,7 @@ impl StarryNightModule {
         bolt: &ActiveLightning,
         erase: bool,
     ) {
+        let ps = Self::pixel_scale(ctx.module.rgn_height);
         let main_color = if erase {
             rgb(0, 0, 0)
         } else {
@@ -350,11 +379,11 @@ impl StarryNightModule {
         // Match original DrawLightningBolt `< lastMainIdx` (omits tip inside building)
         let main_draw_len = bolt.main_segs.len().saturating_sub(1);
         for seg in &bolt.main_segs[..main_draw_len] {
-            ctx.surface.line(seg.x1, seg.y1, seg.x2, seg.y2, 1, main_color);
+            ctx.surface.line(seg.x1, seg.y1, seg.x2, seg.y2, ps, main_color);
         }
         let fork_draw_len = bolt.fork_segs.len().saturating_sub(1);
         for seg in &bolt.fork_segs[..fork_draw_len] {
-            ctx.surface.line(seg.x1, seg.y1, seg.x2, seg.y2, 1, fork_color);
+            ctx.surface.line(seg.x1, seg.y1, seg.x2, seg.y2, ps, fork_color);
         }
     }
 

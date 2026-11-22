@@ -73,6 +73,9 @@ pub struct ClocksModule {
     pos_y: i32,
     clock_w: i32,
     clock_h: i32,
+    disp_w: i32,
+    disp_h: i32,
+    scale_f: f32,
     last_second: i32,
     art: Option<ClockArt>,
     offscreen: Option<AdSurface>,
@@ -93,6 +96,9 @@ impl ClocksModule {
             pos_y: 0,
             clock_w: 324,
             clock_h: 76,
+            disp_w: 324,
+            disp_h: 76,
+            scale_f: 1.0,
             last_second: 61,
             art: None,
             offscreen: None,
@@ -345,46 +351,80 @@ impl ClocksModule {
             );
         }
 
-        // Blit to screen BEFORE moving (exact Digital order)
-        ctx.surface.bit_blt_surface(
-            self.pos_x,
-            self.pos_y,
-            self.clock_w,
-            self.clock_h,
-            offscreen,
-            0,
-            0,
-            ROP_SRCCOPY,
-        );
+        // Blit to screen BEFORE moving (exact Digital order, scaled cleanly for HD/4K)
+        let prev_x = self.pos_x;
+        let prev_y = self.pos_y;
+        if self.disp_w == self.clock_w && self.disp_h == self.clock_h {
+            ctx.surface.bit_blt_surface(
+                self.pos_x,
+                self.pos_y,
+                self.clock_w,
+                self.clock_h,
+                offscreen,
+                0,
+                0,
+                ROP_SRCCOPY,
+            );
+        } else {
+            ctx.surface.stretch_blt_surface(
+                self.pos_x,
+                self.pos_y,
+                self.disp_w,
+                self.disp_h,
+                offscreen,
+                0,
+                0,
+                self.clock_w,
+                self.clock_h,
+                ROP_SRCCOPY,
+            );
+        }
 
         self.do_sound(ctx, min, sec);
 
-        // Floating motion & bounce
+        // Floating motion & bounce (erase previous border strip cleanly at HD/4K scales)
         if self.move_counter > self.move_delay {
             self.move_counter = 0;
-            let max_x = (ctx.module.rgn_width - self.clock_w).max(0);
-            let max_y = (ctx.module.rgn_height - self.clock_h).max(0);
+            let sp = self.scale_f.round().max(1.0) as i32;
+            let sx = self.step_x * sp;
+            let sy = self.step_y * sp;
+            let max_x = (ctx.module.rgn_width - self.disp_w).max(0);
+            let max_y = (ctx.module.rgn_height - self.disp_h).max(0);
             if self.dir_x {
-                self.pos_x += self.step_x;
+                self.pos_x += sx;
                 if self.pos_x >= max_x {
+                    self.pos_x = max_x;
                     self.dir_x = false;
                 }
             } else {
-                self.pos_x -= self.step_x;
+                self.pos_x -= sx;
                 if self.pos_x <= 0 {
+                    self.pos_x = 0;
                     self.dir_x = true;
                 }
             }
             if self.dir_y {
-                self.pos_y += self.step_y;
+                self.pos_y += sy;
                 if self.pos_y >= max_y {
+                    self.pos_y = max_y;
                     self.dir_y = false;
                 }
             } else {
-                self.pos_y -= self.step_y;
+                self.pos_y -= sy;
                 if self.pos_y <= 0 {
+                    self.pos_y = 0;
                     self.dir_y = true;
                 }
+            }
+            if self.pos_x > prev_x {
+                ctx.surface.pat_blt_black(prev_x, prev_y, self.pos_x - prev_x, self.disp_h);
+            } else if self.pos_x < prev_x {
+                ctx.surface.pat_blt_black(self.pos_x + self.disp_w, prev_y, prev_x - self.pos_x, self.disp_h);
+            }
+            if self.pos_y > prev_y {
+                ctx.surface.pat_blt_black(prev_x, prev_y, self.disp_w, self.pos_y - prev_y);
+            } else if self.pos_y < prev_y {
+                ctx.surface.pat_blt_black(prev_x, self.pos_y + self.disp_h, self.disp_w, prev_y - self.pos_y);
             }
         }
     }
@@ -411,31 +451,50 @@ impl ClocksModule {
         };
 
         // Floating motion & bounce BEFORE blitting (exact Analog order)
+        let prev_x = self.pos_x;
+        let prev_y = self.pos_y;
         if self.move_counter > self.move_delay {
             self.move_counter = 0;
-            let max_x = (ctx.module.rgn_width - face_w).max(0);
-            let max_y = (ctx.module.rgn_height - face_h).max(0);
+            let sp = self.scale_f.round().max(1.0) as i32;
+            let sx = self.step_x * sp;
+            let sy = self.step_y * sp;
+            let max_x = (ctx.module.rgn_width - self.disp_w).max(0);
+            let max_y = (ctx.module.rgn_height - self.disp_h).max(0);
             if self.dir_x {
-                self.pos_x += self.step_x;
+                self.pos_x += sx;
                 if self.pos_x >= max_x {
+                    self.pos_x = max_x;
                     self.dir_x = false;
                 }
             } else {
-                self.pos_x -= self.step_x;
+                self.pos_x -= sx;
                 if self.pos_x <= 0 {
+                    self.pos_x = 0;
                     self.dir_x = true;
                 }
             }
             if self.dir_y {
-                self.pos_y += self.step_y;
+                self.pos_y += sy;
                 if self.pos_y >= max_y {
+                    self.pos_y = max_y;
                     self.dir_y = false;
                 }
             } else {
-                self.pos_y -= self.step_y;
+                self.pos_y -= sy;
                 if self.pos_y <= 0 {
+                    self.pos_y = 0;
                     self.dir_y = true;
                 }
+            }
+            if self.pos_x > prev_x {
+                ctx.surface.pat_blt_black(prev_x, prev_y, self.pos_x - prev_x, self.disp_h);
+            } else if self.pos_x < prev_x {
+                ctx.surface.pat_blt_black(self.pos_x + self.disp_w, prev_y, prev_x - self.pos_x, self.disp_h);
+            }
+            if self.pos_y > prev_y {
+                ctx.surface.pat_blt_black(prev_x, prev_y, self.disp_w, self.pos_y - prev_y);
+            } else if self.pos_y < prev_y {
+                ctx.surface.pat_blt_black(prev_x, self.pos_y + self.disp_h, self.disp_w, prev_y - self.pos_y);
             }
         }
 
@@ -478,16 +537,31 @@ impl ClocksModule {
                 }
             }
 
-            ctx.surface.bit_blt_surface(
-                self.pos_x,
-                self.pos_y,
-                face_w + 4,
-                face_h + 4,
-                offscreen,
-                0,
-                0,
-                ROP_SRCCOPY,
-            );
+            if self.disp_w == face_w + 4 && self.disp_h == face_h + 4 {
+                ctx.surface.bit_blt_surface(
+                    self.pos_x,
+                    self.pos_y,
+                    face_w + 4,
+                    face_h + 4,
+                    offscreen,
+                    0,
+                    0,
+                    ROP_SRCCOPY,
+                );
+            } else {
+                ctx.surface.stretch_blt_surface(
+                    self.pos_x,
+                    self.pos_y,
+                    self.disp_w,
+                    self.disp_h,
+                    offscreen,
+                    0,
+                    0,
+                    face_w + 4,
+                    face_h + 4,
+                    ROP_SRCCOPY,
+                );
+            }
         }
 
         self.do_sound(ctx, min, sec);
@@ -529,9 +603,17 @@ impl AdModule for ClocksModule {
             self.clock_h = 76;
         }
 
+        // Scale clock smoothly for modern HD/4K screens (clamping so digital clock fits narrow preview windows!)
+        let base_sf = (ctx.module.rgn_height as f32 / 480.0).clamp(1.0, 4.0);
+        let fit_w = (ctx.module.rgn_width as f32 * 0.88) / self.clock_w.max(1) as f32;
+        let fit_h = (ctx.module.rgn_height as f32 * 0.85) / self.clock_h.max(1) as f32;
+        self.scale_f = base_sf.min(fit_w).min(fit_h).max(0.5);
+        self.disp_w = (self.clock_w as f32 * self.scale_f).round().max(16.0) as i32;
+        self.disp_h = (self.clock_h as f32 * self.scale_f).round().max(16.0) as i32;
+
         // Clamp starting position inside viewport in case monitor/demo size changed
-        let max_x = (ctx.module.rgn_width - self.clock_w).max(0);
-        let max_y = (ctx.module.rgn_height - self.clock_h).max(0);
+        let max_x = (ctx.module.rgn_width - self.disp_w).max(0);
+        let max_y = (ctx.module.rgn_height - self.disp_h).max(0);
         self.pos_x = self.pos_x.clamp(0, max_x);
         self.pos_y = self.pos_y.clamp(0, max_y);
 

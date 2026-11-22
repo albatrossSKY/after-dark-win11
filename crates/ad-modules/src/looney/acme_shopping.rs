@@ -1,20 +1,23 @@
 //! "ACME Home Shopping" — Classic 1995 *Looney Tunes* After Dark 3.0 module.
 //!
-//! Renders the ACME Home Shopping Network TV broadcast with tiled ACME wallpaper,
-//! 33 authentic ACME mail-order products from `cSTR #12000`, 43 product photos
-//! from `RLEP #12002..#12006`, bitmap font `#12100`, live inventory & timer
-//! countdowns, `Inflation:` price scaling, red `SOLD OUT` stamp, `BellTree` /
-//! `RedSlash` SFX, and the *ACME Home Shopping* MIDI theme (`#10`).
+//! Full-widescreen HD/4K ACME Home Shopping Network broadcast with scaled tiled
+//! ACME wallpaper (or live Windows desktop when `Clear Screen First` is unchecked),
+//! continuously fitted `512x400` ACME TV studio card, 33 authentic ACME products
+//! (`cSTR #12000`), 43 product photos (`RLEP #12002..#12006`), crisp scaled
+//! bitmap typography (`#12100`), live inventory & countdowns, `Inflation:` price
+//! scaling, red `SOLD OUT` stamp, SFX, and the *ACME Home Shopping* MIDI theme.
 
 use ad_sdk::{AdContext, AdControl, AdMetadata, AdModule, AdResult};
 
 use crate::looney::{
-    ACME_SFX, MOD_ACME, SONG_ACME, draw_looney_text, load_anim, load_multi_rlep, load_rlep,
-    looney_pack, wrap_looney_text,
+    ACME_SFX, MOD_ACME, SONG_ACME, draw_looney_text_f, load_anim, load_multi_rlep, load_rlep,
+    looney_pack, wrap_looney_text_f,
 };
 use crate::simpsons::{
     CompoundAnim, KIND_CSTR, RlepBank, draw_line_px, mac_roman_to_string, music_loops_from_slider,
+    restore_or_clear,
 };
+use crate::tng::stage_fit;
 
 struct AcmeProduct {
     title: String,
@@ -27,6 +30,7 @@ pub struct AcmeShoppingModule {
     inflation_raw: i32,
     clear_first: bool,
     music_raw: i32,
+    saved_bg: Vec<u32>,
     bank: Option<RlepBank>,
     font: Option<RlepBank>,
     layout: Option<CompoundAnim>,
@@ -46,8 +50,9 @@ impl AcmeShoppingModule {
         Self {
             duration_raw: 40,
             inflation_raw: 50,
-            clear_first: false,
-            music_raw: 20,
+            clear_first: true,
+            music_raw: 25,
+            saved_bg: Vec::new(),
             bank: None,
             font: None,
             layout: None,
@@ -85,11 +90,11 @@ impl AcmeShoppingModule {
                 },
                 AdControl::Checkbox {
                     title: "Clear Screen First".to_string(),
-                    default_checked: false,
+                    default_checked: true,
                 },
                 AdControl::LabeledSlider {
                     title: "Music:".to_string(),
-                    default_raw: 20,
+                    default_raw: 25,
                     labels: vec![
                         "Never".into(),
                         "Once".into(),
@@ -181,6 +186,7 @@ impl AdModule for AcmeShoppingModule {
 
     fn do_initialize(&mut self, ctx: &mut AdContext<'_>) -> AdResult {
         self.ensure_loaded();
+        self.saved_bg = ctx.surface.pixels().to_vec();
         self.duration_raw = ctx.module.raw_control_value[0].clamp(0, 100);
         self.inflation_raw = ctx.module.raw_control_value[1].clamp(0, 100);
         self.clear_first = ctx.module.raw_control_value[2] != 0;
@@ -191,7 +197,7 @@ impl AdModule for AcmeShoppingModule {
         self.cur_slogan = 0;
         self.qty_init = 120;
         self.qty_left = 84;
-        ctx.surface.pixels_mut().fill(0x0008_1018);
+        restore_or_clear(ctx.surface, &self.saved_bg, self.clear_first, 0x0008_1018);
 
         if let Some(loops) = music_loops_from_slider(self.music_raw) {
             looney_pack().play_music(ctx.sound, ctx.system.sound_enabled, SONG_ACME, loops);
@@ -201,7 +207,7 @@ impl AdModule for AcmeShoppingModule {
     }
 
     fn do_blank(&mut self, ctx: &mut AdContext<'_>) -> AdResult {
-        ctx.surface.pixels_mut().fill(0x0008_1018);
+        restore_or_clear(ctx.surface, &self.saved_bg, self.clear_first, 0x0008_1018);
         AdResult::NoError
     }
 
@@ -233,211 +239,121 @@ impl AdModule for AcmeShoppingModule {
 
         let w = ctx.surface.width;
         let h = ctx.surface.height;
-        ctx.surface.pixels_mut().fill(0x0008_1420);
 
         let (Some(bank), Some(font), Some(layout)) = (&self.bank, &self.font, &self.layout) else {
             return AdResult::NoError;
         };
 
-        // 1. Tiled ACME green/teal background pattern (`sp=1`, 0-indexed frame 0, 128x64)
-        if let Some(tile) = bank.frames.first() {
-            let tw = tile.w.max(32);
-            let th = tile.h.max(32);
-            let mut ty = 0;
-            while ty < h {
-                let mut tx = 0;
-                while tx < w {
-                    tile.blit(ctx.surface, tx, ty);
-                    tx += tw;
+        let pad = (h / 34).clamp(8, 28);
+        let (sf, ox_f, oy_f) = stage_fit(w, h, 512.0, 400.0, pad, pad);
+        let sx = |x: f32| (ox_f + x * sf).round() as i32;
+        let sy = |y: f32| (oy_f + y * sf).round() as i32;
+
+        // 1. Tiled ACME green/teal background wallpaper (when Clear Screen First is checked)
+        //    or overlay cleanly over the real Windows desktop when unchecked!
+        if self.clear_first || self.saved_bg.len() != ctx.surface.pixels().len() {
+            ctx.surface.pixels_mut().fill(0x0008_1420);
+            if let Some(tile) = bank.frames.first() {
+                let tile_s = sf.clamp(1.0, 2.5);
+                let tw = (tile.w as f32 * tile_s).round().max(32.0) as i32;
+                let th = (tile.h as f32 * tile_s).round().max(32.0) as i32;
+                let mut ty = 0;
+                while ty < h {
+                    let mut tx = 0;
+                    while tx < w {
+                        tile.blit_rect(ctx.surface, tx, ty, tw, th, false, false, false, false);
+                        tx += tw;
+                    }
+                    ty += th;
                 }
-                ty += th;
             }
+        } else {
+            ctx.surface.pixels_mut().copy_from_slice(&self.saved_bg);
         }
 
-        // 2. Centered 512x400 ACME Home Shopping TV console (`OFst #12000` frame 8)
-        let ox = (w - 512) / 2;
-        let oy = (h - 400) / 2;
-        layout.draw_stage_frame(ctx.surface, 8, ox, oy, 1);
+        // 2. Continuously scaled 512x400 ACME Home Shopping TV studio console (`OFst #12000` frame 8)
+        layout.draw_stage_frame_f(ctx.surface, 8, ox_f, oy_f, sf, false, false);
 
-        // 3. Seal badge (`w2=28`, 136x136) in lower-left panel
+        // 3. Operator Standing By seal badge (`w2=28`, 136x136) in lower-left panel
         if let Some(seal) = bank.frames.get(28) {
-            seal.blit(ctx.surface, ox + 12, oy + 216);
+            seal.blit_transformed_f(ctx.surface, sx(12.0), sy(216.0), sf, false, false, true, false);
         }
 
-        // 4. Product photograph (`w2=29..71`, 228x171) + shadow (`w2=16`)
+        // 4. Product photograph (`w2=29..71`, 228x171) + drop shadow (`w2=16`)
         if let Some(shadow) = bank.frames.get(16) {
-            shadow.blit(ctx.surface, ox + 281, oy + 27);
+            shadow.blit_transformed_f(ctx.surface, sx(281.0), sy(27.0), sf, false, false, false, false);
         }
         let photo_count = bank.frames.len().saturating_sub(29).max(1);
         let photo_idx = 29 + (self.cur_prod % photo_count);
         if let Some(photo) = bank.frames.get(photo_idx) {
-            photo.blit(ctx.surface, ox + 279, oy + 24);
+            photo.blit_transformed_f(ctx.surface, sx(279.0), sy(24.0), sf, false, false, true, false);
         }
 
-        // 5. Product text, prices, inventory, timer, and ordering slogan using bitmap font `#12100`
+        // 5. Product text, prices, inventory, timer, and ordering slogan scaled proportionally!
         if let Some(prod) = self.products.get(self.cur_prod) {
-            draw_looney_text(
-                ctx.surface,
-                font,
-                &prod.title,
-                ox + 12,
-                oy + 68,
-                Some(0xFFE0_40),
-                1,
-            );
+            draw_looney_text_f(ctx.surface, font, &prod.title, sx(12.0), sy(68.0), Some(0xFFE0_40), sf);
 
-            let lines = wrap_looney_text(font, &prod.desc, 250, 1);
+            let lines = wrap_looney_text_f(font, &prod.desc, (250.0 * sf).round() as i32, sf);
             for (li, line) in lines.iter().take(7).enumerate() {
-                draw_looney_text(
+                draw_looney_text_f(
                     ctx.surface,
                     font,
                     line,
-                    ox + 12,
-                    oy + 94 + (li as i32) * 17,
+                    sx(12.0),
+                    sy(94.0 + (li as f32) * 17.0),
                     Some(0xFFFF_FF),
-                    1,
+                    sf,
                 );
             }
 
             let item_no = format!("#{:04}", 1001 + self.cur_prod * 17);
-            draw_looney_text(
-                ctx.surface,
-                font,
-                &item_no,
-                ox + 373,
-                oy + 221,
-                Some(0xFFE0_40),
-                1,
-            );
+            draw_looney_text_f(ctx.surface, font, &item_no, sx(373.0), sy(221.0), Some(0xFFE0_40), sf);
 
             let mult = 1 + (self.inflation_raw / 25);
-            let list_dollars = prod.base_price * mult + 50;
-            let our_dollars = prod.base_price * mult + 20;
-            let pay_dollars = prod.base_price * mult;
-            let list_str = format!("${}.99", list_dollars);
-            let our_str = format!("${}.99", our_dollars);
-            let pay_str = format!("${}.99", pay_dollars);
+            let list_str = format!("${}.99", prod.base_price * mult + 50);
+            let our_str = format!("${}.99", prod.base_price * mult + 20);
+            let pay_str = format!("${}.99", prod.base_price * mult);
+            let slash_w = (sf * 2.0).round().max(2.0) as i32;
 
-            // LIST PRICE (`oy + 221`) with red slash
-            draw_looney_text(
-                ctx.surface,
-                font,
-                &list_str,
-                ox + 432,
-                oy + 221,
-                Some(0xC0D8_F0),
-                1,
-            );
-            draw_line_px(
-                ctx.surface,
-                ox + 430,
-                oy + 234,
-                ox + 496,
-                oy + 222,
-                0xFF20_20,
-                2,
-            );
+            draw_looney_text_f(ctx.surface, font, &list_str, sx(432.0), sy(221.0), Some(0xC0D8_F0), sf);
+            draw_line_px(ctx.surface, sx(430.0), sy(234.0), sx(496.0), sy(222.0), 0xFF20_20, slash_w);
 
-            // OUR PRICE (`oy + 261`) with red slash
-            draw_looney_text(
-                ctx.surface,
-                font,
-                &our_str,
-                ox + 432,
-                oy + 261,
-                Some(0xC0D8_F0),
-                1,
-            );
-            draw_line_px(
-                ctx.surface,
-                ox + 430,
-                oy + 274,
-                ox + 496,
-                oy + 262,
-                0xFF20_20,
-                2,
-            );
+            draw_looney_text_f(ctx.surface, font, &our_str, sx(432.0), sy(261.0), Some(0xC0D8_F0), sf);
+            draw_line_px(ctx.surface, sx(430.0), sy(274.0), sx(496.0), sy(262.0), 0xFF20_20, slash_w);
 
-            // YOU PAY (`oy + 301`)
-            draw_looney_text(
-                ctx.surface,
-                font,
-                &pay_str,
-                ox + 432,
-                oy + 301,
-                Some(0x40FF_60),
-                1,
-            );
+            draw_looney_text_f(ctx.surface, font, &pay_str, sx(432.0), sy(301.0), Some(0x40FF_60), sf);
 
-            // TIME LEFT (`oy + 341`)
-            let rem_secs = ((cycle_ticks.saturating_sub(self.prod_ticks)) / 6).max(0);
+            let rem_secs = cycle_ticks.saturating_sub(self.prod_ticks) / 6;
             let time_str = format!("0:{:02}", rem_secs.min(59));
-            draw_looney_text(
-                ctx.surface,
-                font,
-                &time_str,
-                ox + 440,
-                oy + 341,
-                Some(0xFFE0_40),
-                1,
-            );
+            draw_looney_text_f(ctx.surface, font, &time_str, sx(440.0), sy(341.0), Some(0xFFE0_40), sf);
 
-            draw_looney_text(
-                ctx.surface,
-                font,
-                "555-ACME",
-                ox + 304,
-                oy + 254,
-                Some(0xFFE0_40),
-                1,
-            );
+            draw_looney_text_f(ctx.surface, font, "555-ACME", sx(304.0), sy(254.0), Some(0xFFE0_40), sf);
             let status_txt = if self.qty_left == 0 {
                 "SOLD OUT!"
             } else {
                 "CALL NOW!"
             };
-            draw_looney_text(
-                ctx.surface,
-                font,
-                status_txt,
-                ox + 304,
-                oy + 274,
-                Some(0xFFFF_FF),
-                1,
-            );
+            draw_looney_text_f(ctx.surface, font, status_txt, sx(304.0), sy(274.0), Some(0xFFFF_FF), sf);
         }
 
         if let Some(slogan) = self.slogans.get(self.cur_slogan) {
             let short: String = slogan.chars().take(42).collect();
-            draw_looney_text(
-                ctx.surface,
-                font,
-                &short,
-                ox + 12,
-                oy + 375,
-                Some(0xFFFF_FF),
-                1,
-            );
+            draw_looney_text_f(ctx.surface, font, &short, sx(12.0), sy(375.0), Some(0xFFFF_FF), sf);
         }
-        // NUMBER LEFT (`ox + 456, oy + 375`)
         let qty_str = format!("{:03}", self.qty_left);
-        draw_looney_text(
-            ctx.surface,
-            font,
-            &qty_str,
-            ox + 458,
-            oy + 375,
-            Some(0xFFE0_40),
-            1,
-        );
+        draw_looney_text_f(ctx.surface, font, &qty_str, sx(458.0), sy(375.0), Some(0xFFE0_40), sf);
 
-        // 6. Red "SOLD OUT" stamp (`w2=20` / `21`, 119x90) over product photo when qty hits 0
         if self.qty_left == 0 || self.prod_ticks > (cycle_ticks * 3) / 4 {
             if let Some(stamp) = bank.frames.get(20) {
-                stamp.blit(ctx.surface, ox + 335, oy + 64);
+                stamp.blit_transformed_f(ctx.surface, sx(335.0), sy(64.0), sf, false, false, true, false);
             }
         }
 
+        AdResult::NoError
+    }
+
+    fn do_close(&mut self, ctx: &mut AdContext<'_>) -> AdResult {
+        ctx.sound.stop_all();
         AdResult::NoError
     }
 }

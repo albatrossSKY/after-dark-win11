@@ -1,10 +1,7 @@
 //! "Putty Tat Splat!" — Classic 1995 *Looney Tunes* After Dark 3.0 module.
 //!
-//! Tweety Bird has taken a swim in *Dr. Jekyll's Formula*! Every time Sylvester
-//! the Cat stalks Tweety across your Windows desktop, Tweety transforms into a
-//! giant Hyde-Tweety monster (`OFst #9000`, 557 compound frames across
-//! `RLEP #9000..#9001`)—or Granny wallops Sylvester with her umbrella
-//! (`TWEETY_VOICES` + `SONG_PUTTY_TAT` `#110`).
+//! Tweety Bird, Sylvester the Cat, Granny, and Dr. Jekyll's Formula (`OFst #9000`)
+//! smoothly scaled for modern HD/4K monitors across your live Windows desktop!
 
 use ad_sdk::{AdContext, AdControl, AdMetadata, AdModule, AdResult};
 
@@ -29,7 +26,7 @@ impl PuttyTatModule {
     pub fn new() -> Self {
         Self {
             clear_first: false,
-            music_raw: 20,
+            music_raw: 25,
             saved_bg: Vec::new(),
             anim: None,
             tweety_frame: 12,
@@ -54,7 +51,7 @@ impl PuttyTatModule {
                 },
                 AdControl::LabeledSlider {
                     title: "Music:".to_string(),
-                    default_raw: 20,
+                    default_raw: 25,
                     labels: vec![
                         "Never".into(),
                         "Once".into(),
@@ -97,11 +94,12 @@ impl AdModule for PuttyTatModule {
         self.tick = 0;
         self.tweety_frame = 12;
         self.sylvester_frame = 220;
-        self.tweety_x = 180.0;
-        self.sylvester_x = 370.0;
+        let w = ctx.surface.width.max(320);
+        self.tweety_x = w as f32 * 0.30;
+        self.sylvester_x = w as f32 * 0.62;
         restore_or_clear(ctx.surface, &self.saved_bg, self.clear_first, 0x0012_1A28);
 
-        if let Some(loops) = music_loops_from_slider(self.music_raw.max(25)) {
+        if let Some(loops) = music_loops_from_slider(self.music_raw) {
             looney_pack().play_music(ctx.sound, ctx.system.sound_enabled, SONG_PUTTY_TAT, loops);
         }
         looney_pack().play_voice(ctx.sound, ctx.system.sound_enabled, TWEETY_VOICES[8]);
@@ -119,19 +117,25 @@ impl AdModule for PuttyTatModule {
 
         let w = ctx.surface.width;
         let h = ctx.surface.height;
-        // Restore the user's real Windows desktop (or solid backdrop if Clear Screen First is checked)
+        let sf = (h as f32 / 480.0).clamp(1.0, 3.2);
+        let char_sf = (sf * 1.35).clamp(1.1, 3.8);
         restore_or_clear(ctx.surface, &self.saved_bg, self.clear_first, 0x0012_1A28);
 
         let Some(anim) = &self.anim else {
             return AdResult::NoError;
         };
 
-        // Dr. Jekyll's Formula beaker (`w2=20`) on the right and Granny (`w2=67`) on the left
+        // Dr. Jekyll's Formula beaker (`w2=20`) on right & Granny (`w2=67`) on left, smoothly scaled!
+        let ground_y = h - (24.0 * sf).round() as i32;
         if let Some(formula) = anim.sprites.get(20) {
-            formula.blit(ctx.surface, w - formula.w - 36, h - formula.h - 32);
+            let fw = (formula.w as f32 * char_sf).round() as i32;
+            let fh = (formula.h as f32 * char_sf).round() as i32;
+            formula.blit_rect(ctx.surface, w - fw - (28.0 * sf) as i32, ground_y - fh, fw, fh, false, false, true, false);
         }
         if let Some(granny) = anim.sprites.get(67) {
-            granny.blit(ctx.surface, 28, h - granny.h - 24);
+            let gw = (granny.w as f32 * char_sf).round() as i32;
+            let gh = (granny.h as f32 * char_sf).round() as i32;
+            granny.blit_rect(ctx.surface, (24.0 * sf) as i32, ground_y - gh, gw, gh, false, false, true, false);
         }
 
         // Advance Tweety (`12..=205`) and Sylvester (`180..=556`), filtering out tiny icon/splat sub-frames
@@ -140,30 +144,34 @@ impl AdModule for PuttyTatModule {
         self.sylvester_frame =
             advance_filtered_range(anim, self.sylvester_frame, 180, 556, 38, 45, 220, 220);
 
-        self.tweety_x += 1.8;
-        self.sylvester_x += 2.2;
-        if self.tweety_x > (w - 90) as f32 {
-            self.tweety_x = 120.0;
+        self.tweety_x += 2.0 * sf;
+        self.sylvester_x += 2.4 * sf;
+        let margin = 100.0 * sf;
+        if self.tweety_x > w as f32 - margin {
+            self.tweety_x = margin;
         }
-        if self.sylvester_x > (w - 70) as f32 {
-            self.sylvester_x = 140.0;
+        if self.sylvester_x > w as f32 - margin {
+            self.sylvester_x = margin * 1.25;
         }
 
-        let ground_y = h - 28;
-        anim.draw_anchored_bottom(
+        anim.draw_anchored_bottom_f(
             ctx.surface,
             self.tweety_frame,
             self.tweety_x as i32,
             ground_y,
-            1,
+            char_sf,
+            false,
+            true,
             false,
         );
-        anim.draw_anchored_bottom(
+        anim.draw_anchored_bottom_f(
             ctx.surface,
             self.sylvester_frame,
             self.sylvester_x as i32,
             ground_y,
-            1,
+            char_sf,
+            false,
+            true,
             false,
         );
 
@@ -172,6 +180,11 @@ impl AdModule for PuttyTatModule {
             looney_pack().play_voice(ctx.sound, ctx.system.sound_enabled, vid);
         }
 
+        AdResult::NoError
+    }
+
+    fn do_close(&mut self, ctx: &mut AdContext<'_>) -> AdResult {
+        ctx.sound.stop_all();
         AdResult::NoError
     }
 }

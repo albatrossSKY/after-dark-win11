@@ -21,7 +21,253 @@ pub mod worfs_weapons;
 
 use std::sync::OnceLock;
 
-use crate::simpsons::{CompoundAnim, RlepBank, SimpsonsPack};
+use ad_sdk::canvas::AdSurface;
+
+use crate::simpsons::{
+    CompoundAnim, RlepBank, SimpsonsPack, draw_bitmap_text, fill_circle_px, fill_rect_px,
+};
+
+pub const LCARS_AMBER: u32 = 0x00FF_AA38;
+pub const LCARS_PEACH: u32 = 0x00FF_CC88;
+pub const LCARS_GOLD: u32 = 0x00F4_9C38;
+pub const LCARS_LAVENDER: u32 = 0x00C8_8CE8;
+pub const LCARS_PERIWINKLE: u32 = 0x0088_9CF8;
+pub const LCARS_SKY: u32 = 0x0068_C4FF;
+pub const LCARS_SALMON: u32 = 0x00E8_6C6C;
+pub const LCARS_RED: u32 = 0x00FF_4848;
+pub const LCARS_GREEN: u32 = 0x0058_FF88;
+
+/// All 4 authentic Starfleet LCARS bitmap fonts (`14px`, `18px`, `32px`, `50px`) for crisp HD/4K text.
+pub struct LcarsFontSet {
+    pub f14: RlepBank,
+    pub f18: RlepBank,
+    pub f32: RlepBank,
+    pub f42: RlepBank,
+    loaded: bool,
+}
+
+impl LcarsFontSet {
+    pub fn empty() -> Self {
+        let empty_bank = || RlepBank {
+            frames: Vec::new(),
+            palette: Vec::new(),
+        };
+        Self {
+            f14: empty_bank(),
+            f18: empty_bank(),
+            f32: empty_bank(),
+            f42: empty_bank(),
+            loaded: false,
+        }
+    }
+
+    pub fn ensure_loaded(&mut self) {
+        if self.loaded {
+            return;
+        }
+        self.f14 = load_lcars_font(FONT_LCARS_14);
+        self.f18 = load_lcars_font(FONT_LCARS_18);
+        self.f32 = load_lcars_font(FONT_LCARS_32);
+        self.f42 = load_lcars_font(FONT_LCARS_42);
+        self.loaded = true;
+    }
+
+    /// Pick the sharpest native LCARS font bank & scale for a target glyph height in pixels.
+    /// Returns `(font_bank, scale, line_height_px)`.
+    pub fn pick(&self, target_px: i32) -> (&RlepBank, i32, i32) {
+        if target_px <= 16 || self.f18.frames.is_empty() {
+            (&self.f14, 1, 16)
+        } else if target_px <= 25 || self.f32.frames.is_empty() {
+            (&self.f18, 1, 21)
+        } else if target_px <= 39 || self.f42.frames.is_empty() {
+            (&self.f32, 1, 35)
+        } else if target_px <= 56 {
+            (&self.f42, 1, 52)
+        } else {
+            let s = (target_px / 32).max(2);
+            (&self.f32, s, 35 * s)
+        }
+    }
+}
+
+/// Compute aspect-preserving `(scale_f, ox, oy)` to fit a `(stage_w x stage_h)` stage into `(w x h)`.
+pub fn stage_fit(w: i32, h: i32, stage_w: f32, stage_h: f32, pad_x: i32, pad_y: i32) -> (f32, f32, f32) {
+    let avail_w = (w - pad_x * 2).max(64) as f32;
+    let avail_h = (h - pad_y * 2).max(64) as f32;
+    let sf = (avail_w / stage_w).min(avail_h / stage_h).max(0.25);
+    let ox = (w as f32 - stage_w * sf) * 0.5;
+    let oy = (h as f32 - stage_h * sf) * 0.5;
+    (sf, ox, oy)
+}
+
+/// Draw a solid rounded rectangle (used for authentic Starfleet LCARS buttons, pills, and caps).
+pub fn fill_rounded_rect(surface: &mut AdSurface, x0: i32, y0: i32, x1: i32, y1: i32, r: i32, col: u32) {
+    let w = x1 - x0;
+    let h = y1 - y0;
+    if w <= 0 || h <= 0 {
+        return;
+    }
+    let r = r.clamp(0, (w / 2).min(h / 2));
+    if r <= 1 {
+        fill_rect_px(surface, x0, y0, x1, y1, col);
+        return;
+    }
+    fill_rect_px(surface, x0 + r, y0, x1 - r, y1, col);
+    fill_rect_px(surface, x0, y0 + r, x1, y1 - r, col);
+    fill_circle_px(surface, x0 + r, y0 + r, r, col);
+    fill_circle_px(surface, x1 - r - 1, y0 + r, r, col);
+    fill_circle_px(surface, x0 + r, y1 - r - 1, r, col);
+    fill_circle_px(surface, x1 - r - 1, y1 - r - 1, r, col);
+}
+
+/// Draw an authentic top-left Starfleet LCARS curved elbow with inner concave sweep matching `bg_col`.
+pub fn draw_lcars_elbow_tl(
+    surface: &mut AdSurface,
+    x: i32,
+    y: i32,
+    bar_w: i32,
+    top_h: i32,
+    arm_h: i32,
+    arm_w: i32,
+    col: u32,
+) {
+    draw_lcars_elbow_tl_bg(surface, x, y, bar_w, top_h, arm_h, arm_w, col, 0x0000_0000);
+}
+
+pub fn draw_lcars_elbow_tl_bg(
+    surface: &mut AdSurface,
+    x: i32,
+    y: i32,
+    bar_w: i32,
+    top_h: i32,
+    arm_h: i32,
+    arm_w: i32,
+    col: u32,
+    bg_col: u32,
+) {
+    let r_out = (bar_w / 2).min(top_h).max(8);
+    let r_in = (top_h / 2).max(6);
+    fill_rect_px(surface, x + r_out, y, x + arm_w, y + top_h, col);
+    fill_rect_px(surface, x, y + r_out, x + bar_w, y + arm_h, col);
+    fill_circle_px(surface, x + r_out, y + r_out, r_out, col);
+    fill_rect_px(surface, x + bar_w, y + top_h, x + bar_w + r_in, y + top_h + r_in, col);
+    fill_circle_px(surface, x + bar_w + r_in, y + top_h + r_in, r_in, bg_col);
+}
+
+/// Draw an authentic bottom-left Starfleet LCARS curved elbow with inner concave sweep matching `bg_col`.
+pub fn draw_lcars_elbow_bl(
+    surface: &mut AdSurface,
+    x: i32,
+    y_bot: i32,
+    bar_w: i32,
+    bot_h: i32,
+    arm_h: i32,
+    arm_w: i32,
+    col: u32,
+) {
+    draw_lcars_elbow_bl_bg(surface, x, y_bot, bar_w, bot_h, arm_h, arm_w, col, 0x0000_0000);
+}
+
+pub fn draw_lcars_elbow_bl_bg(
+    surface: &mut AdSurface,
+    x: i32,
+    y_bot: i32,
+    bar_w: i32,
+    bot_h: i32,
+    arm_h: i32,
+    arm_w: i32,
+    col: u32,
+    bg_col: u32,
+) {
+    let r_out = (bar_w / 2).min(bot_h).max(8);
+    let r_in = (bot_h / 2).max(6);
+    let y_top = y_bot - arm_h;
+    fill_rect_px(surface, x + r_out, y_bot - bot_h, x + arm_w, y_bot, col);
+    fill_rect_px(surface, x, y_top, x + bar_w, y_bot - r_out, col);
+    fill_circle_px(surface, x + r_out, y_bot - r_out - 1, r_out, col);
+    fill_rect_px(
+        surface,
+        x + bar_w,
+        y_bot - bot_h - r_in,
+        x + bar_w + r_in,
+        y_bot - bot_h,
+        col,
+    );
+    fill_circle_px(surface, x + bar_w + r_in, y_bot - bot_h - r_in - 1, r_in, bg_col);
+}
+
+/// Fill widescreen side wings (`x0..x1`) with subtle, authentic animated LCARS sensor telemetry bars
+/// so 4:3 TNG stages seamlessly span modern 16:9 / 16:10 / 21:9 displays without black bars!
+pub fn draw_lcars_wing_telemetry(
+    surface: &mut AdSurface,
+    x0: i32,
+    y0: i32,
+    x1: i32,
+    y1: i32,
+    tick: usize,
+    fonts: &LcarsFontSet,
+    right_side: bool,
+) {
+    let ww = x1 - x0;
+    let wh = y1 - y0;
+    if ww < 48 || wh < 120 {
+        return;
+    }
+    let pad = (ww / 12).clamp(6, 16);
+    let ix0 = x0 + pad;
+    let ix1 = x1 - pad;
+    let iw = ix1 - ix0;
+    if iw < 30 {
+        return;
+    }
+
+    // Top & bottom thin LCARS accent caps
+    let cap_h = (wh / 42).clamp(8, 20);
+    let c_top = if right_side { LCARS_PERIWINKLE } else { LCARS_AMBER };
+    let c_bot = if right_side { LCARS_AMBER } else { LCARS_LAVENDER };
+    fill_rounded_rect(surface, ix0, y0 + pad, ix1, y0 + pad + cap_h, cap_h / 2, c_top);
+    fill_rounded_rect(surface, ix0, y1 - pad - cap_h, ix1, y1 - pad, cap_h / 2, c_bot);
+
+    // Side tactical status pills & pulsing LCARS waveform bars
+    let mut cy = y0 + pad + cap_h + 12;
+    let row_h = (wh / 26).clamp(14, 28);
+    let palette = [LCARS_GOLD, LCARS_LAVENDER, LCARS_SKY, LCARS_PEACH, LCARS_PERIWINKLE];
+    let (font, fs, _) = fonts.pick((row_h - 4).clamp(12, 20));
+    let mut row_idx = 0usize;
+    while cy + row_h < y1 - pad - cap_h - 10 {
+        let phase = (tick / 14 + row_idx * 3 + if right_side { 5 } else { 0 }) % palette.len();
+        let col = palette[phase];
+        if row_idx % 3 == 0 {
+            // Pill button with LCARS numeric code
+            let pill_w = (iw * 3 / 4).max(28);
+            let px0 = if right_side { ix1 - pill_w } else { ix0 };
+            fill_rounded_rect(surface, px0, cy, px0 + pill_w, cy + row_h - 3, (row_h - 3) / 2, col);
+            let code = format!(
+                "{:02}-{:03}",
+                47 + ((row_idx * 7 + if right_side { 13 } else { 0 }) % 50),
+                (104 + row_idx * 37 + (tick / 20) * 3) % 999
+            );
+            draw_bitmap_text(
+                surface,
+                font,
+                &code,
+                px0 + 8,
+                cy + 2,
+                Some(0x0000_0000),
+                fs,
+            );
+        } else {
+            // Animated sensor level bar
+            let frac = ((tick as f32 * 0.06 + row_idx as f32 * 0.85).sin() * 0.4 + 0.55).clamp(0.15, 0.98);
+            let bw = ((iw as f32) * frac) as i32;
+            fill_rect_px(surface, ix0, cy + 4, ix1, cy + row_h - 6, 0x0016_1824);
+            let bx0 = if right_side { ix1 - bw } else { ix0 };
+            fill_rect_px(surface, bx0, cy + 4, bx0 + bw, cy + row_h - 6, col);
+        }
+        cy += row_h + 6;
+        row_idx += 1;
+    }
+}
 
 static TNG_PACK_BYTES: &[u8] = include_bytes!("../../../../assets/tng/tng.adp");
 static TNG_PACK: OnceLock<SimpsonsPack> = OnceLock::new();

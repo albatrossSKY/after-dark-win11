@@ -1,11 +1,9 @@
 //! "Taz Desktop" — Classic 1995 *Looney Tunes* After Dark 3.0 module.
 //!
 //! *"It's spinning wildly out of control, but it's not your hard drive!"*
-//! The Tasmanian Devil whirls across your real Windows desktop like a tornado
-//! (`OFst #3000`, 298 compound frames across `RLEP #3000..#3004`), chewing bite
-//! marks directly into your desktop canvas (`canvas_buf`) and spitting out
-//! chomped scraps (`w2=63..67`) with authentic digitized Taz babble, spin,
-//! chew, and burp clips (`TAZ_VOICES`).
+//! The Tasmanian Devil whirls across your real Windows desktop (`OFst #3000`)
+//! with smooth proportional HD/4K scaling, chewing scaled bite holes directly
+//! out of your desktop canvas (`canvas_buf`) and spitting out chomped scraps!
 
 use ad_sdk::{AdContext, AdControl, AdMetadata, AdModule, AdResult};
 
@@ -81,20 +79,20 @@ impl TazDesktopModule {
         }
     }
 
-    /// Chew a circular bite mark directly out of `canvas_buf` (the user's live Windows desktop!).
     fn chew_desktop_hole(&mut self, w: i32, h: i32, cx: i32, cy: i32, r: i32) {
         if self.canvas_buf.len() != (w * h) as usize {
             return;
         }
         let r2 = r * r;
-        let rim2 = (r + 2) * (r + 2);
-        for dy in -(r + 2)..=(r + 2) {
+        let rim = r + 3;
+        let rim2 = rim * rim;
+        for dy in -rim..=rim {
             let py = cy + dy;
             if py < 0 || py >= h {
                 continue;
             }
             let row = (py * w) as usize;
-            for dx in -(r + 2)..=(r + 2) {
+            for dx in -rim..=rim {
                 let px = cx + dx;
                 if px < 0 || px >= w {
                     continue;
@@ -132,8 +130,11 @@ impl AdModule for TazDesktopModule {
         self.spin_frame = 105;
         let w = ctx.surface.width.max(320);
         let h = ctx.surface.height.max(240);
-        self.taz_x = (w / 2 - 40) as f32;
-        self.taz_y = (h / 2 + 50) as f32;
+        let sf = (h as f32 / 480.0).clamp(1.0, 3.2);
+        self.taz_x = w as f32 * 0.45;
+        self.taz_y = h as f32 * 0.62;
+        self.vx = 3.6 * sf;
+        self.vy = 2.4 * sf;
         looney_pack().play_voice(ctx.sound, ctx.system.sound_enabled, TAZ_VOICES[0]);
         AdResult::NoError
     }
@@ -151,12 +152,13 @@ impl AdModule for TazDesktopModule {
 
         let w = ctx.surface.width;
         let h = ctx.surface.height;
+        let sf = (h as f32 / 480.0).clamp(1.0, 3.2);
+        let char_sf = (sf * 1.3).clamp(1.05, 3.8);
         if self.canvas_buf.len() != (w * h) as usize {
             self.saved_bg = ctx.surface.pixels().to_vec();
             self.canvas_buf = self.saved_bg.clone();
         }
 
-        // Periodically restore the desktop after Taz has chewed it heavily
         if self.tick % 480 == 0 && self.saved_bg.len() == self.canvas_buf.len() {
             self.canvas_buf.copy_from_slice(&self.saved_bg);
             self.scraps.clear();
@@ -165,26 +167,29 @@ impl AdModule for TazDesktopModule {
         let spd_mult = 0.85 + (self.appetite_raw as f32) / 65.0;
         self.taz_x += self.vx * spd_mult;
         self.taz_y += self.vy * spd_mult;
-        if self.taz_x < 90.0 || self.taz_x > (w - 90) as f32 {
+        let mx = 95.0 * sf;
+        let my_top = 135.0 * sf;
+        let my_bot = 36.0 * sf;
+        if self.taz_x < mx || self.taz_x > w as f32 - mx {
             self.vx = -self.vx;
         }
-        if self.taz_y < 120.0 || self.taz_y > (h - 36) as f32 {
+        if self.taz_y < my_top || self.taz_y > h as f32 - my_bot {
             self.vy = -self.vy;
         }
 
-        // Chew bite marks into the live Windows desktop along Taz's path!
+        // Chew resolution-scaled bite marks into the live Windows desktop!
         let chew_period = (18 - (self.appetite_raw / 8)).max(5) as u32;
         if self.tick % chew_period == 0 {
-            let bx = self.taz_x as i32 + ctx.rng.rand_mod(32) - 16;
-            let by = self.taz_y as i32 - 36 + ctx.rng.rand_mod(24) - 12;
-            let br = 14 + ctx.rng.rand_mod(12);
+            let bx = self.taz_x as i32 + ctx.rng.rand_mod((36.0 * sf) as i32) - (18.0 * sf) as i32;
+            let by = self.taz_y as i32 - (44.0 * sf) as i32 + ctx.rng.rand_mod((28.0 * sf) as i32) - (14.0 * sf) as i32;
+            let br = ((15 + ctx.rng.rand_mod(12)) as f32 * sf).round() as i32;
             self.chew_desktop_hole(w, h, bx, by, br);
-            if self.scraps.len() >= 18 {
+            if self.scraps.len() >= 22 {
                 self.scraps.remove(0);
             }
             self.scraps.push(ChompedScrap {
-                x: bx + ctx.rng.rand_mod(30) - 15,
-                y: by + ctx.rng.rand_mod(24) - 12,
+                x: bx + ctx.rng.rand_mod((34.0 * sf) as i32) - (17.0 * sf) as i32,
+                y: by + ctx.rng.rand_mod((28.0 * sf) as i32) - (14.0 * sf) as i32,
                 sprite_idx: 63 + (ctx.rng.rand_mod(5) as usize),
             });
             if self.tick % (chew_period * 3) == 0 {
@@ -193,39 +198,41 @@ impl AdModule for TazDesktopModule {
             }
         }
 
-        // Copy chewed Windows desktop canvas to screen surface
         ctx.surface.pixels_mut().copy_from_slice(&self.canvas_buf);
 
         let Some(anim) = &self.anim else {
             return AdResult::NoError;
         };
 
-        // Draw spit-out chomped scraps (`w2=63..67`)
         for scrap in &self.scraps {
             if let Some(sp) = anim.sprites.get(scrap.sprite_idx) {
-                sp.blit(ctx.surface, scrap.x, scrap.y);
+                sp.blit_transformed_f(ctx.surface, scrap.x, scrap.y, char_sf, false, false, true, false);
             }
         }
 
-        // Advance Taz walking/chewing (`0..=94`) and Taz spinning tornado (`96..=121`)
         self.walk_frame = advance_filtered_range(anim, self.walk_frame, 0, 94, 80, 70, 170, 160);
         self.spin_frame = advance_filtered_range(anim, self.spin_frame, 96, 121, 80, 88, 120, 115);
 
-        anim.draw_anchored_bottom(
+        anim.draw_anchored_bottom_f(
             ctx.surface,
             self.walk_frame,
             self.taz_x as i32,
             self.taz_y as i32,
-            1,
+            char_sf,
             self.vx < 0.0,
+            true,
+            false,
         );
 
-        anim.draw_anchored_bottom(
+        let spin_x = (w - (self.taz_x as i32)).clamp((110.0 * sf) as i32, (w - (110.0 * sf) as i32).max(110));
+        anim.draw_anchored_bottom_f(
             ctx.surface,
             self.spin_frame,
-            w - (self.taz_x as i32).clamp(110, w - 110),
-            h - 38,
-            1,
+            spin_x,
+            h - (36.0 * sf).round() as i32,
+            char_sf,
+            false,
+            true,
             false,
         );
 
@@ -234,6 +241,11 @@ impl AdModule for TazDesktopModule {
             looney_pack().play_voice(ctx.sound, ctx.system.sound_enabled, vid);
         }
 
+        AdResult::NoError
+    }
+
+    fn do_close(&mut self, ctx: &mut AdContext<'_>) -> AdResult {
+        ctx.sound.stop_all();
         AdResult::NoError
     }
 }

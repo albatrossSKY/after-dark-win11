@@ -1,9 +1,8 @@
 //! "Marvin's Invasion" — Classic 1995 *Looney Tunes* After Dark 3.0 module.
 //!
-//! Your computer is obstructing Marvin the Martian's view of Venus! Marvin
-//! beams down onto your Windows desktop through glowing portal rings, drops
-//! Instant Martian pills, and clashes with Duck Dodgers in the 24½th Century
-//! (`OFst #6000`, 574 compound frames across `RLEP #6000..#6001`, plus `MARVIN_VOICES`).
+//! Marvin the Martian, Instant Martians, and Duck Dodgers in the 24½th Century
+//! (`OFst #6000`) smoothly scaled for modern widescreen HD/4K monitors across
+//! your live Windows desktop (or scaled space tile backdrop when checked).
 
 use ad_sdk::{AdContext, AdControl, AdMetadata, AdModule, AdResult};
 
@@ -96,6 +95,7 @@ impl AdModule for MarvinsInvasionModule {
         self.actors.clear();
         let w = ctx.surface.width.max(320);
         let h = ctx.surface.height.max(240);
+        let sf = (h as f32 / 480.0).clamp(1.0, 3.2);
         let n_frames = self
             .anim
             .as_ref()
@@ -104,10 +104,12 @@ impl AdModule for MarvinsInvasionModule {
             .max(1);
         let count = self.desired_count();
         for i in 0..count {
+            let x = (w as f32 * 0.14) + ((i as f32) / count.max(1) as f32) * (w as f32 * 0.72);
+            let y = (h as f32 * 0.30) + (((i * 113) % 100) as f32 / 100.0) * (h as f32 * 0.62);
             self.actors.push(MartianActor {
-                x: (90 + (i * (w as usize - 180)) / count.max(1)) as f32,
-                y: (160 + (i * 85) % (h as usize - 190).max(1)) as f32,
-                vx: if i % 2 == 0 { 1.6 } else { -1.6 },
+                x,
+                y,
+                vx: (if i % 2 == 0 { 1.8 } else { -1.8 }) * sf,
                 frame_idx: (i * n_frames) / count.max(1),
             });
         }
@@ -127,6 +129,7 @@ impl AdModule for MarvinsInvasionModule {
 
         let w = ctx.surface.width;
         let h = ctx.surface.height;
+        let sf = (h as f32 / 480.0).clamp(1.0, 3.2);
         restore_or_clear(ctx.surface, &self.saved_bg, false, 0x0006_0A18);
 
         let Some(anim) = &self.anim else {
@@ -135,13 +138,13 @@ impl AdModule for MarvinsInvasionModule {
 
         if self.tiled_bg {
             if let Some(tile) = anim.sprites.get(2) {
-                let tw = tile.w.max(32);
-                let th = tile.h.max(32);
+                let tw = (tile.w as f32 * sf).round().max(32.0) as i32;
+                let th = (tile.h as f32 * sf).round().max(32.0) as i32;
                 let mut ty = 0;
                 while ty < h {
                     let mut tx = 0;
                     while tx < w {
-                        tile.blit(ctx.surface, tx, ty);
+                        tile.blit_rect(ctx.surface, tx, ty, tw, th, false, false, false, false);
                         tx += tw;
                     }
                     ty += th;
@@ -150,20 +153,24 @@ impl AdModule for MarvinsInvasionModule {
         }
 
         let n_frames = anim.frames.len().saturating_sub(1);
+        let margin = 76.0 * sf;
+        let char_sf = (sf * 1.3).clamp(1.05, 3.6);
         for actor in &mut self.actors {
             actor.frame_idx =
                 advance_filtered_range(anim, actor.frame_idx, 0, n_frames, 44, 52, 240, 240);
             actor.x += actor.vx;
-            if actor.x < 70.0 || actor.x > (w - 70) as f32 {
+            if actor.x < margin || actor.x > w as f32 - margin {
                 actor.vx = -actor.vx;
             }
-            anim.draw_anchored_bottom(
+            anim.draw_anchored_bottom_f(
                 ctx.surface,
                 actor.frame_idx,
                 actor.x as i32,
                 actor.y as i32,
-                1,
+                char_sf,
                 actor.vx < 0.0,
+                true,
+                false,
             );
         }
 
@@ -172,6 +179,11 @@ impl AdModule for MarvinsInvasionModule {
             looney_pack().play_voice(ctx.sound, ctx.system.sound_enabled, vid);
         }
 
+        AdResult::NoError
+    }
+
+    fn do_close(&mut self, ctx: &mut AdContext<'_>) -> AdResult {
+        ctx.sound.stop_all();
         AdResult::NoError
     }
 }
