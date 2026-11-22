@@ -8,7 +8,7 @@ members = [
 ]
 
 [workspace.package]
-version = "1.0.0"
+version = "2.0.0"
 edition = "2024"
 license = "MIT"
-description = "After Dark 1.0a (1991) 1:1 decompiled & modernized for Windows 11 in native Rust"
+description = "After Dark v2.0 (77 Modules: Classic 1991 + The Simpsons + Star Trek: TNG + Looney Tunes) modernized for Windows 11 in native Rust"

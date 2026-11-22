@@ -1,35 +1,88 @@
-# After Dark 1.0a (1991) — Windows 11 Native Rust Port
+# After Dark v2.0 — Windows 11 Native Rust Port (77 Built-in Screensavers)
 
-A complete **1:1 disassembly-backed decompilation** and Windows 11 modernization of **Berkeley Systems' After Dark 1.0a for Windows (1991)** written in native Win64 Rust (`windows-sys`), including **all 37 screensaver modules** (all 34 `.AD` modules, both `AD.EXE` built-in savers, and the `ADMODULE.SDK` Blanker sample).
+A complete **disassembly- & resource-backed native Win64 Rust port** (`windows-sys`) of **Berkeley Systems' After Dark** for Windows 11, uniting **all 77 classic screensaver modules** across four legendary collections into a single standalone executable (`after-dark.exe`):
 
-## Gallery — All 37 Built-in Screensavers
+- **Classic After Dark 1.0a (1991)** — **37 modules** (all 34 `.AD` modules, both `AD.EXE` built-in savers, and the `ADMODULE.SDK` Blanker sample)
+- **The Simpsons After Dark (1994)** — **15 modules** (2,647 `RLEP` frames, 12,175 `OFst`/`OFtb` compound poses, 87 digitized cast voice clips, 9 polyphonic MIDI songs)
+- **Star Trek: The Next Generation After Dark (1994)** — **13 modules** (1,518 `RLEP` frames, 3,240 `OFst`/`OFtb` compound poses, 56 bridge/cast audio clips, 2 MIDI scores)
+- **Looney Tunes After Dark (1995)** — **12 modules** (2,050 `RLEP` frames, 8,534 `OFst`/`OFtb` compound poses, 103 cast voice/SFX clips including MACE 3:1 ADPCM audio, 13 MIDI cartoon themes)
+
+---
+
+## Visual Galleries
+
+### Looney Tunes Collection (1995 — All 12 Modules)
+
+| Looney Tunes (1–6) | Looney Tunes (7–12) |
+| :---: | :---: |
+| ![Looney Tunes 1-6](docs/screenshots/looney_sheet_1.png) | ![Looney Tunes 7-12](docs/screenshots/looney_sheet_2.png) |
+
+### The Simpsons Collection (1994 — All 15 Modules)
+
+| The Simpsons (1–9) | The Simpsons (10–15) |
+| :---: | :---: |
+| ![The Simpsons 1-9](docs/screenshots/simpsons_sheet_1.png) | ![The Simpsons 10-15](docs/screenshots/simpsons_sheet_2.png) |
+
+### Star Trek: The Next Generation Collection (1994 — All 13 Modules)
+
+| Star Trek: TNG (1–9) | Star Trek: TNG (10–13) |
+| :---: | :---: |
+| ![Star Trek TNG 1-9](docs/screenshots/tng_sheet_1.png) | ![Star Trek TNG 10-13](docs/screenshots/tng_sheet_2.png) |
+
+### Full 77-Module Catalog Contact Sheets (Alphabetical)
 
 | Modules 1–10 | Modules 11–20 |
 | :---: | :---: |
 | ![Modules 1-10](docs/screenshots/sheet_1.png) | ![Modules 11-20](docs/screenshots/sheet_2.png) |
 
-| Modules 21–30 | Modules 31–37 |
+| Modules 21–30 | Modules 31–40 |
 | :---: | :---: |
-| ![Modules 21-30](docs/screenshots/sheet_3.png) | ![Modules 31-37](docs/screenshots/sheet_4.png) |
+| ![Modules 21-30](docs/screenshots/sheet_3.png) | ![Modules 31-40](docs/screenshots/sheet_4.png) |
 
-## Highlights
+| Modules 41–50 | Modules 51–60 |
+| :---: | :---: |
+| ![Modules 41-50](docs/screenshots/sheet_5.png) | ![Modules 51-60](docs/screenshots/sheet_6.png) |
 
-### 1. Floppy & Custom LZW Unpacker (`tools/`)
-- [tools/unpack_floppy.py](tools/unpack_floppy.py) — Reads the 720 KB FAT12 `DISK01.IMG` and decompresses all 67 `.*$` payload files using the exact 9–14-bit MSB-first LZW algorithm reversed from `INSTALL.EXE` (`SEG 9`).
-- [tools/ne_inspect.py](tools/ne_inspect.py) — Custom Win16 NE (New Executable) parser, relocation/ordinal resolver, resource extractor, and Capstone 16-bit x86 disassembler.
-- [tools/dump_phase1.py](tools/dump_phase1.py) — Extracts lossless original `.bmp`, `.ico`, `.cur`, `TYPE_1000` (`AD_CONTROL`), and `TYPE_2000` (`AD_STRING`) resources plus annotated disassemblies into `assets/` and `docs/disasm/`.
+| Modules 61–70 | Modules 71–77 |
+| :---: | :---: |
+| ![Modules 61-70](docs/screenshots/sheet_7.png) | ![Modules 71-77](docs/screenshots/sheet_8.png) |
 
-### 2. Modernized Win64 After Dark SDK (`crates/ad-sdk` & `crates/ad-blanker-sdk-example`)
-- 1:1 Rust port of `ADMODULE.SDK` (`MODULE.H` + `RES_IDS.H`), including:
-  - Exact Microsoft C 6.0 `srand`/`rand` LCG (`MsvcRand`).
-  - Exact 235-entry palettes (`HSV_PAL`, `RGB_PAL`, `WHITE_PAL`, `PRIMARY_PAL`) decompiled from `AD.EXE` `SEG 13`.
-  - Exact `AD.EXE` `SEG 13` slider value mapping formulas (`LabeledSlider` & `NumericSlider`).
-  - Native Win32 GDI offscreen DIB canvas (`AdSurface`) preserving true 1-bpp monochrome `HBITMAP` semantics (including 3-operand ROPs like `DSPDxax = 0x00E20746`) + crisp nearest-neighbor (`COLORONCOLOR`) integer scaling (`1x / 2x / 3x / Auto`).
-  - Non-blocking WinMM `waveOut` retro PC-speaker synthesizer (`AdSound`) replacing Windows 3.0 `SOUND.DRV`.
-  - 1:1 `AD_PREFS.INI` (including `SEG 10` password codec), 41-byte binary `RANDOM.ADS`, 1968-byte binary `MESSAGES.ADS`, and 4-section `GRAFSTAT.TXT` compatibility.
-  - Modernized Win64 C-ABI dynamic `.dll` plugin loader (`ad_module_entry_v1` / `ad_module_metadata_v1`) demonstrated by `crates/ad-blanker-sdk-example` (port of `ADMODULE.SDK\BLANKER`).
+---
 
-### 3. All 37 Built-in 1:1 Decompiled Modules (`crates/ad-modules`)
+## What's New in Version 2.0
+
+1. **77 Built-in Screensavers Across 4 Collections**:
+   - Complete integration of **Classic 1991 (`37`)**, **The Simpsons (`15`)**, **Star Trek: The Next Generation (`13`)**, and **Looney Tunes (`12`)** with all original `RLEP`/`OFst`/`OFtb` compound animations, custom bitmap fonts, trivia databases, digitized cast voices (`WinMM waveOut`), and polyphonic Standard MIDI (`WinMM midiOutShortMsg`) music.
+2. **Real Windows 11 Desktop Overlay for All Desktop-Interacting Modules**:
+   - Desktop modules (*Homer Eats*, *Grass Skirts*, *Itchy & Scratchy*, *Objets d'Bart*, *Snowball II*, *Bad Dog!*, *Borg*, *Crystalline Entity*, *Parallels*, *Desquetoppe D'Amour*, *Putty Tat Splat!*, *Taz Desktop*, *Yosemite Sam*, *Marvin's Invasion*, *Can of Worms*, *Down the Drain*, *Hard Rain*, *Punch Out*, *Puzzle*, *Spotlight*) capture and animate directly over your live Windows 11 desktop.
+3. **Frame Rate & Smoothness Modes (`When / Setup...`)**:
+   - **Authentic Retro (15–30 FPS)** — Original 1991–1995 module frame pacing (`target_frame_ms`).
+   - **Smooth 60 FPS** — 16 ms frame pacing for silky movement on modern displays.
+   - **High Refresh 120+ FPS** — 8 ms frame pacing for high-refresh monitors.
+4. **6 Display Scale & Filter Modes (`When / Setup...`)**:
+   - **Auto (Smart Retro 2x / 3x)** — Automatically chooses integer pixel scaling for 1080p/1440p/4K displays.
+   - **1x (Native Monitor Pixels)** — Full monitor resolution.
+   - **2x (Crisp Integer Pixel Art)** — Nearest-neighbor 2× pixel art scaling.
+   - **3x (Crisp 4K Integer)** — Nearest-neighbor 3× pixel art scaling.
+   - **640×480 Classic 4:3 Stage** — Authentic 640×480 4:3 canvas centered with aspect-correct pillarboxing on widescreen monitors.
+   - **2x Retro CRT Scanlines** — 2× integer scaling with a classic CRT scanline overlay.
+5. **Collection Filter, Live Search Box & Favorites (`★ Fav`)**:
+   - Filter the Control Panel module list by collection (**All Collections (77)**, **Classic 1991 (37)**, **The Simpsons (15)**, **Star Trek: TNG (13)**, **Looney Tunes (12)**, **★ Favorites**), search live across all 77 modules, and star your favorites with one click.
+6. **Audio Mixer & Test Audio Button (`When / Setup...`)**:
+   - Independent **Voice / SFX Volume (0–100%)** and **MIDI Music Volume (0–100%)** controls with real-time PCM/tone amplitude scaling and MIDI velocity/CC#7 scaling, plus a **Test Audio** button.
+7. **Pack-Aware Randomizer & One-Click Playlists (`Randomizer` → `Choose...`)**:
+   - Every module in the Randomizer selector shows its `[Classic]`, `[Simpsons]`, `[Star Trek]`, or `[Looney Tunes]` collection badge, with 8 one-click preset buttons: **All (76)**, **Classic 1991**, **Simpsons**, **Star Trek**, **Looney Tunes**, **All Cartoons**, **★ Favorites**, and **Clear All**.
+8. **4 Multi-Monitor Modes (`When / Setup...`)**:
+   - **Independent Per Monitor (Same Module)** — Each display runs its own independent instance of the active module.
+   - **Different Module Per Monitor (Random Pool)** — Each connected monitor runs a different screensaver chosen from your Randomizer pool simultaneously.
+   - **Spanned Across All Monitors** — A single unified virtual-desktop canvas across all displays.
+   - **Primary Monitor Only** — Runs on the primary display only.
+
+---
+
+## Complete Catalog of All 77 Built-in Screensavers
+
+### Collection 1: Classic After Dark 1.0a (1991 — 37 Modules)
 
 | Module | Original Binary | Highlights |
 |---|---|---|
@@ -71,18 +124,72 @@ A complete **1:1 disassembly-backed decompilation** and Windows 11 modernization
 | **Wrap Around** | `WRAP.AD` | Rainbow figure-8 Lissajous wrapping ribbons |
 | **Zot!** | `ZOT.AD` | Forked single- & double-flash jagged lightning bolts |
 
-### 4. Native Windows 11 Host (`crates/ad-host` → `after-dark.exe`)
-- **Retro Windows 3.1 Control Panel** by default (original `LOGO` + red `LMETEOR`, clickable `ON_SW`/`OFF_SW` toggle switch, beveled 3D gray platforms, authentic 4-slot dynamic module controls, credits & About dialogs) with a **1-click toggle to Modern Windows 11 Dark UI** (DWM dark titlebar, rounded corners, dark card styling, Segoe UI).
-- **Native Win32 Module Editors & Pickers**:
-  - `Randomizer` → `Choose..` multi-select dialog (`RANDOM.ADS`)
-  - `Messages` → `Edit...` 8-slot rich message editor (`MESSAGES.ADS`)
-  - `GraphStat` → `Edit..` 4-section multiline text editor (`GRAFSTAT.TXT`)
-  - `Logo` (`Picture..`) & `Globe` (`Map...`) → native `.BMP` file picker (`GetOpenFileNameW`)
-  - `Slide Show` (`Pictures..`) → native folder picker (`SHBrowseForFolderW`)
-- **System Tray daemon** using original `AD` (active) and `INACTIVE` (X-over) icons.
-- **Hot Corners** (`Sleep Now` / `Never Sleep`), **Global Idle Monitor**, **Global Hotkey** (`Ctrl+Shift+S`), **Shift+Sleep** solid-black blanking, and **Ctrl-at-launch** disabled startup.
-- **Multi-Monitor** (`Per-Monitor`, `Spanned`, `Primary Only`) & **High-DPI 4K Integer Scaling** (`Auto`, `1x`, `2x`, `3x`).
-- **Live Demo Mode** animating behind the Control Panel with real-time slider updates.
+### Collection 2: The Simpsons After Dark (1994 — 15 Modules)
+
+| Module | ID | Highlights |
+|---|---|---|
+| **Bart's Chalkboard** | `simpsons_chalkboard` | Bart writes all 30 authentic episode chalkboard gags (`CSTR #1300`) in bitmap handwriting font (`RLEP #1500`) before skateboarding off |
+| **Files of Springfield** | `simpsons_files` | Springfield Elementary personnel folder cabinet with animated character tabs, mugshots, and biographies |
+| **Grampa's Tales** | `simpsons_grampa` | Abe Simpson rambles through meandering stories (`HSTR`) in the Retirement Castle with 21 digitized voice clips & snores |
+| **Grass Skirts** | `simpsons_grass_skirts` | Hula-dancing Homer, Marge, Bart, Lisa, and Maggie parade across the Windows desktop to polyphonic Hawaiian MIDI themes |
+| **Homer Eats** | `simpsons_homer_eats` | Giant Homer chomps actual bite holes out of your live Windows desktop (`RLEP #12000`) while shouting *"Mmm... donuts!"* and *"D'oh!"* |
+| **How To Draw Bart** | `simpsons_how_to_draw` | Step-by-step animator's pencil & ink construction of Bart Simpson on an artist's drawing board |
+| **Itchy & Scratchy** | `simpsons_itchy_scratchy` | Cartoon chase and mallet mayhem across the live Windows desktop with the *Itchy & Scratchy* MIDI theme song |
+| **Krusty the Clown** | `simpsons_krusty` | Krusty juggling, laughing (`"Hey hey, kids!"`), and getting pied in his television studio |
+| **Lisa's Moods** | `simpsons_lisa_moods` | Lisa improvises Happy & Angry saxophone solos (`LISA` choreographed notes + MIDI sax scores) |
+| **Mr. Burns** | `simpsons_mr_burns` | Montgomery Burns and Smithers monitor the Nuclear Power Plant security cameras (`"Excellent..."`) |
+| **Objets d'Bart** | `simpsons_objets_bart` | Bart sprays graffiti tags, slingshots, and skateboards directly onto your captured Windows desktop |
+| **Physics With Frink** | `simpsons_physics` | Professor Frink's chalkboard physics demonstrations (`"Glayvin!"`) with animated mechanical contraptions |
+| **Simpsons Clocks** | `simpsons_clocks` | Live functional wall clocks (`SCLO`) featuring Homer, Bart, Krusty, and Maggie with animated eyes and pendulums |
+| **Snowball II** | `simpsons_snowball` | Snowball II stalks, pounces, and scratches claw marks across the live Windows desktop |
+| **Springfield Trivia** | `simpsons_trivia` | Interactive multi-category *Simpsons* trivia quiz (`QERY`) with scoreboard and cast reactions |
+
+### Collection 3: Star Trek: The Next Generation After Dark (1994 — 13 Modules)
+
+| Module | ID | Highlights |
+|---|---|---|
+| **Ascension** | `tng_ascension` | Worf's Klingon Rite of Ascension chamber with Painstik gauntlets and Klingon battle cries |
+| **Bad Dog!** | `tng_bad_dog` | Alien shapeshifter morphing from a glowing orb into a creature prowling across your Windows desktop |
+| **Borg** | `tng_borg` | Borg Cube tractor beams, green assimilation grid lasers, and *"Resistance is futile"* voice clips over your desktop |
+| **Communicator** | `tng_communicator` | Starfleet LCARS comm badge & incoming subspace hail transmissions from Picard, Riker, Data, Worf & Geordi |
+| **Crystalline Entity** | `tng_crystalline` | Refracting fractal Crystalline Entity shattering crystal shards out of your live Windows desktop |
+| **Data** | `tng_data` | Lt. Commander Data painting at his easel, reciting Ode to Spot, and petting Spot the cat |
+| **Encounter at Farpoint** | `tng_farpoint` | Spaceborne Farpoint jellyfish entities pulsing with bioluminescent color spectra in orbit |
+| **Enterprise** | `tng_enterprise` | USS *Enterprise* NCC-1701-D cruising at impulse and jumping to warp flash across a deep-space nebula starfield |
+| **Holodeck 3** | `tng_holodeck` | Yellow/black Holodeck wireframe grid materializing 3D holographic simulations |
+| **Number One** | `tng_number_one` | Commander Riker playing jazz trombone solos in Ten Forward with floating musical notes |
+| **Parallels** | `tng_parallels` | Quantum fissure tears opening across the Windows desktop as alternate-reality *Enterprise* ships emerge |
+| **Scotty's Files** | `tng_scottys_files` | Captain Montgomery Scott's animated LCARS technical schematics & Starfleet vessel blueprints |
+| **TNG Trivia** | `tng_trivia` | Full LCARS bridge console *Star Trek: TNG* trivia computer (`QERY`) with categories, timer, and ranks |
+
+### Collection 4: Looney Tunes After Dark (1995 — 12 Modules)
+
+| Module | ID | Highlights |
+|---|---|---|
+| **ACME Home Shopping** | `looney_acme_shopping` | Wile E. Coyote's live TV shopping network pitching all 12 original ACME contraptions (`STR# #2000..#2006`) with Granny Operator Standing By |
+| **Cartoons 101** | `looney_cartoons_101` | Blueprint university lecture board teaching the 10 Cartoon Laws of Physics (`STR# #11000`) with Wile E. Coyote & Road Runner |
+| **Conducktor** | `looney_conducktor` | Maestro Daffy Duck conducting Verdi's *Anvil Chorus* (`#70`) and Tchaikovsky's *1812 Overture* (`#80`) with rising colored notes & falling safes |
+| **Desquetoppe D'Amour** | `looney_desquetoppe` | Pepé Le Pew wooingly bounding after Penelope Pussycat across your real Windows desktop with rising hearts and French romance |
+| **Looney Messages** | `looney_messages` | Speedy Gonzales & Foghorn Leghorn delivering custom parchment banner messages (`"OUT TO LUNCH."`) in authentic `RLEP #7500` font |
+| **Marvin's Invasion** | `looney_marvins_invasion` | Marvin the Martian and Duck Dodgers in the 24½th Century dueling with disintegrator pistols over your live Windows desktop |
+| **Michigan J. Frog** | `looney_michigan_frog` | Spotlighted theater stage where Michigan J. Frog performs *"Hello! Ma Baby"* (`#10`) in top hat & cane—and croaks when caught |
+| **Putty Tat Splat!** | `looney_putty_tat` | Sylvester stalking Tweety Bird across your real Windows desktop until Tweety drinks Dr. Jekyll's Formula and turns into Monster Tweety |
+| **Rabbitron** | `looney_rabbitron` | Retro arcade high-score cabinet (`B BUNNY 989,000 / E FUDD 14`) where Bugs Bunny outsmarts Elmer Fudd through teleporting doors |
+| **Taz Desktop** | `looney_taz_desktop` | Tasmanian Devil spinning across your real Windows desktop, chewing bite holes directly out of the screen and spitting out scraps |
+| **Wockets' Wed Gware** | `looney_wockets` | Bugs, Daffy, Elmer & Yosemite Sam silhouetted at the bottom of the screen watching Looney Tunes character fireworks burst in the night sky |
+| **Yosemite Sam** | `looney_yosemite_sam` | Yosemite Sam bursting out of saloon doors directly onto your real Windows desktop and blasting six-shooter bullet holes |
+
+---
+
+## Archive & Resource Extraction Pipeline (`tools/`)
+
+- [tools/unpack_floppy.py](tools/unpack_floppy.py) — Reads the 1991 720 KB FAT12 `DISK01.IMG` and decompresses all 67 `.*$` payload files using the exact 9–14-bit MSB-first LZW algorithm reversed from `INSTALL.EXE` (`SEG 9`).
+- [tools/ne_inspect.py](tools/ne_inspect.py) & [tools/dump_phase1.py](tools/dump_phase1.py) — Win16 NE (New Executable) parser, relocation/ordinal resolver, resource extractor, and Capstone 16-bit x86 disassembler.
+- [tools/unpack_sit5.py](tools/unpack_sit5.py) — Pure-Python StuffIt 5 (`SIT5`) archive unpacker (Method 15 LZSS + Huffman) for *The Simpsons* and *Star Trek: TNG* Macintosh archives.
+- [tools/unpack_sit_m13.py](tools/unpack_sit_m13.py) — Pure-Python StuffIt Deluxe (`SIT!`) Method 13 archive unpacker (37-symbol meta-Huffman + 5 static/dynamic LZSS+Huffman table sets + CRC-16 verification) for *Looney Tunes*.
+- [tools/extract_simpsons.py](tools/extract_simpsons.py), [tools/extract_tng.py](tools/extract_tng.py) & [tools/extract_looney.py](tools/extract_looney.py) — Macintosh resource fork parsers that extract `RLEP`, `OFst`, `OFtb`, `clut`, `QERY`, `STR#`, `CSTR`, `HSTR`, `LISA`, `SCLO`, Apple MACE 3:1 ADPCM & uncompressed `snd ` clips (`PCM8`), and `SONG`/`MIDI` arrangements (`SMF Type 1`) into `assets/simpsons/simpsons.adp`, `assets/tng/tng.adp`, and `assets/looney/looney.adp`.
+
+---
 
 ## Build, Verify & Run
 
@@ -92,7 +199,7 @@ cargo build --workspace --release
 .\target\release\after-dark.exe
 ```
 
-`cargo test --workspace` executes automated checks on all 37 modules plus `AD_PREFS.INI`, `RANDOM.ADS`, `MESSAGES.ADS`, `GRAFSTAT.TXT`, and the external Win64 SDK `.dll` plugin, and exports 4 visual contact sheets to `target/verify_snapshots/sheet_1.png..sheet_4.png`.
+`cargo test --workspace` executes automated rendering, audio/resource integrity, and pixel-variance checks across all **77 built-in modules** plus `AD_PREFS.INI`, `RANDOM.ADS`, `MESSAGES.ADS`, `GRAFSTAT.TXT`, and the external Win64 SDK `.dll` plugin, and exports all 14 visual contact sheets to `target/verify_snapshots/`.
 
 Optional CLI flags:
 - `--sleep` — Immediately engage fullscreen screensaver.

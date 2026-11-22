@@ -49,48 +49,95 @@ pub enum UiTheme {
 /// Multi-monitor rendering strategy for Windows 11.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MultiMonitorMode {
-    /// Independent module instance per monitor (default).
+    /// Independent instance of the selected module per monitor (default).
     PerMonitor,
+    /// Different random module on each connected monitor simultaneously!
+    DifferentPerMonitor,
     /// Single unified canvas spanning the virtual desktop across all monitors.
     Spanned,
     /// Primary monitor only.
     PrimaryOnly,
 }
 
-/// Integer pixel scaling mode for High-DPI / 4K displays.
+impl MultiMonitorMode {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::PerMonitor => "Independent Per Monitor (Same Module)",
+            Self::DifferentPerMonitor => "Different Module Per Monitor (Random Pool)",
+            Self::Spanned => "Spanned Across All Monitors",
+            Self::PrimaryOnly => "Primary Monitor Only",
+        }
+    }
+}
+
+/// Frame rate / motion smoothness mode (#1 Modernization).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FrameRateMode {
+    /// Authentic 1991–1995 module timing (`target_frame_ms`, ~15–30 FPS).
+    AuthenticRetro,
+    /// Smooth 60 FPS (`16 ms` interval).
+    Smooth60Fps,
+    /// High-Refresh 120+ FPS (`8 ms` interval).
+    HighRefresh120Fps,
+}
+
+impl FrameRateMode {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::AuthenticRetro => "Authentic Retro (15-30 FPS)",
+            Self::Smooth60Fps => "Smooth 60 FPS",
+            Self::HighRefresh120Fps => "High Refresh 120+ FPS",
+        }
+    }
+
+    pub fn resolve_frame_ms(self, module_target_ms: u32) -> u64 {
+        match self {
+            Self::AuthenticRetro => module_target_ms.max(15) as u64,
+            Self::Smooth60Fps => 16,
+            Self::HighRefresh120Fps => 8,
+        }
+    }
+}
+
+/// Integer pixel scaling & display filter mode for High-DPI / 4K displays (#2 Modernization).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ScaleMode {
-    /// Automatically match Windows DPI integer scale (e.g. 1x @ 100%, 2x @ 150-200%, 3x @ 250%+).
+    /// Automatically scale for modern 1080p/1440p/4K monitors (2x @ >=1080p, 3x @ 4K).
     Auto,
     Scale1x,
     Scale2x,
     Scale3x,
+    /// Classic 640x480 4:3 stage scaled cleanly to the monitor.
+    Classic640x480,
+    /// 2x Integer Scale with Retro CRT Scanline Arcade Filter.
+    CrtScanlines,
 }
 
 impl ScaleMode {
     pub fn resolve_factor(self, dpi: u32) -> i32 {
         match self {
             ScaleMode::Auto => {
-                if dpi >= 240 {
+                if dpi >= 192 {
                     3
-                } else if dpi >= 144 {
-                    2
                 } else {
-                    1
+                    2
                 }
             }
             ScaleMode::Scale1x => 1,
-            ScaleMode::Scale2x => 2,
+            ScaleMode::Scale2x | ScaleMode::CrtScanlines => 2,
             ScaleMode::Scale3x => 3,
+            ScaleMode::Classic640x480 => 2,
         }
     }
 
     pub fn label(self) -> &'static str {
         match self {
-            ScaleMode::Auto => "Auto (DPI Integer)",
-            ScaleMode::Scale1x => "1x (Native Pixels)",
-            ScaleMode::Scale2x => "2x (Crisp Integer)",
+            ScaleMode::Auto => "Auto (Smart Retro 2x/3x)",
+            ScaleMode::Scale1x => "1x (Native Monitor Pixels)",
+            ScaleMode::Scale2x => "2x (Crisp Integer Pixel Art)",
             ScaleMode::Scale3x => "3x (Crisp 4K Integer)",
+            ScaleMode::Classic640x480 => "640x480 Classic 4:3 Stage",
+            ScaleMode::CrtScanlines => "2x Retro CRT Scanlines",
         }
     }
 }
@@ -127,8 +174,12 @@ pub struct AdPrefs {
     pub ui_theme: UiTheme,
     pub scale_mode: ScaleMode,
     pub multi_monitor: MultiMonitorMode,
+    pub frame_rate_mode: FrameRateMode,
     pub sound_enabled: bool,
     pub authentic_timing: bool,
+    pub sfx_volume: i32,
+    pub midi_volume: i32,
+    pub favorites: Vec<String>,
 }
 
 impl Default for AdPrefs {
@@ -158,8 +209,22 @@ impl Default for AdPrefs {
             ui_theme: UiTheme::RetroWin31,
             scale_mode: ScaleMode::Auto,
             multi_monitor: MultiMonitorMode::PerMonitor,
+            frame_rate_mode: FrameRateMode::Smooth60Fps,
             sound_enabled: true,
-            authentic_timing: true,
+            authentic_timing: false,
+            sfx_volume: 85,
+            midi_volume: 80,
+            favorites: vec![
+                "toasters".to_string(),
+                "starry".to_string(),
+                "simpsons_homer_eats".to_string(),
+                "simpsons_chalkboard".to_string(),
+                "tng_borg".to_string(),
+                "tng_warp_effect".to_string(),
+                "looney_acme_shopping".to_string(),
+                "looney_taz_desktop".to_string(),
+                "looney_yosemite_sam".to_string(),
+            ],
         }
     }
 }
@@ -259,18 +324,54 @@ impl AdPrefs {
                             "1x" => ScaleMode::Scale1x,
                             "2x" => ScaleMode::Scale2x,
                             "3x" => ScaleMode::Scale3x,
+                            "640x480" | "classic" => ScaleMode::Classic640x480,
+                            "crt" => ScaleMode::CrtScanlines,
                             _ => ScaleMode::Auto,
                         };
                     }
                     "multimonitor" => {
                         prefs.multi_monitor = match val.to_ascii_lowercase().as_str() {
+                            "different" | "random_per_monitor" => {
+                                MultiMonitorMode::DifferentPerMonitor
+                            }
                             "spanned" => MultiMonitorMode::Spanned,
                             "primary" => MultiMonitorMode::PrimaryOnly,
                             _ => MultiMonitorMode::PerMonitor,
                         };
                     }
+                    "frameratemode" => {
+                        prefs.frame_rate_mode = match val.to_ascii_lowercase().as_str() {
+                            "retro" | "authentic" => FrameRateMode::AuthenticRetro,
+                            "120fps" | "high" => FrameRateMode::HighRefresh120Fps,
+                            _ => FrameRateMode::Smooth60Fps,
+                        };
+                        prefs.authentic_timing =
+                            prefs.frame_rate_mode == FrameRateMode::AuthenticRetro;
+                    }
                     "soundenabled" => prefs.sound_enabled = val != "0",
-                    "authentictiming" => prefs.authentic_timing = val != "0",
+                    "authentictiming" => {
+                        prefs.authentic_timing = val != "0";
+                        if prefs.authentic_timing {
+                            prefs.frame_rate_mode = FrameRateMode::AuthenticRetro;
+                        }
+                    }
+                    "sfxvolume" => {
+                        if let Ok(v) = val.parse::<i32>() {
+                            prefs.sfx_volume = v.clamp(0, 100);
+                        }
+                    }
+                    "midivolume" => {
+                        if let Ok(v) = val.parse::<i32>() {
+                            prefs.midi_volume = v.clamp(0, 100);
+                        }
+                    }
+                    "favorites" => {
+                        prefs.favorites = val
+                            .split(',')
+                            .map(|s| s.trim().to_string())
+                            .filter(|s| !s.is_empty())
+                            .collect();
+                    }
                     _ => {}
                 },
                 _ => {}
@@ -327,21 +428,35 @@ impl AdPrefs {
                 ScaleMode::Scale1x => "1x",
                 ScaleMode::Scale2x => "2x",
                 ScaleMode::Scale3x => "3x",
+                ScaleMode::Classic640x480 => "640x480",
+                ScaleMode::CrtScanlines => "crt",
             }
         ));
         out.push_str(&format!(
             "MultiMonitor={}\r\n",
             match self.multi_monitor {
                 MultiMonitorMode::PerMonitor => "per_monitor",
+                MultiMonitorMode::DifferentPerMonitor => "different",
                 MultiMonitorMode::Spanned => "spanned",
                 MultiMonitorMode::PrimaryOnly => "primary",
+            }
+        ));
+        out.push_str(&format!(
+            "FrameRateMode={}\r\n",
+            match self.frame_rate_mode {
+                FrameRateMode::AuthenticRetro => "retro",
+                FrameRateMode::Smooth60Fps => "60fps",
+                FrameRateMode::HighRefresh120Fps => "120fps",
             }
         ));
         out.push_str(&format!("SoundEnabled={}\r\n", u8::from(self.sound_enabled)));
         out.push_str(&format!(
             "AuthenticTiming={}\r\n",
-            u8::from(self.authentic_timing)
+            u8::from(self.frame_rate_mode == FrameRateMode::AuthenticRetro)
         ));
+        out.push_str(&format!("SfxVolume={}\r\n", self.sfx_volume.clamp(0, 100)));
+        out.push_str(&format!("MidiVolume={}\r\n", self.midi_volume.clamp(0, 100)));
+        out.push_str(&format!("Favorites={}\r\n", self.favorites.join(",")));
 
         fs::write(path, out)
     }

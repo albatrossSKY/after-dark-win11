@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 
 use ad_sdk::canvas::AdSurface;
 use ad_sdk::palette::AdPalette;
-use ad_sdk::prefs::AdPrefs;
+use ad_sdk::prefs::{AdPrefs, FrameRateMode, ScaleMode};
 use ad_sdk::sound::AdSound;
 use ad_sdk::{AdContext, AdModule, AdModuleParams, AdResult, AdSystem, MsvcRand, SaverMode};
 use windows_sys::Win32::Foundation::{HINSTANCE, HWND, LPARAM, LRESULT, POINT, RECT, WPARAM};
@@ -40,6 +40,8 @@ const TIMER_FRAME: usize = 1;
 struct MonitorInstance {
     hwnd: HWND,
     surface: AdSurface,
+    crt_scratch: Option<AdSurface>,
+    scale_mode: ScaleMode,
     module: Box<dyn AdModule>,
     system: AdSystem,
     params: AdModuleParams,
@@ -67,21 +69,16 @@ impl SaverSession {
         owner_hwnd: HWND,
         mode: SaverMode,
         prefs: &AdPrefs,
-        raw_controls: [i32; 4],
         sound: &AdSound,
-        mut factory: impl FnMut() -> Box<dyn AdModule>,
+        mut factory: impl FnMut(usize) -> (Box<dyn AdModule>, [i32; 4]),
     ) -> Option<Self> {
         register_saver_class();
+        sound.set_volumes(prefs.sfx_volume, prefs.midi_volume);
 
         let solid_black_only = mode == SaverMode::Saver
             && unsafe { (GetAsyncKeyState(VK_SHIFT as i32) as u16 & 0x8000) != 0 };
 
-        let targets = if mode == SaverMode::Demo {
-            // Demo mode covers all monitors behind the Control Panel (or primary if PrimaryOnly)
-            resolve_targets(prefs.multi_monitor)
-        } else {
-            resolve_targets(prefs.multi_monitor)
-        };
+        let targets = resolve_targets(prefs.multi_monitor);
 
         let mut init_pt = POINT { x: 0, y: 0 };
         unsafe {
@@ -94,21 +91,35 @@ impl SaverSession {
         let class_w: Vec<u16> = "AfterDark10aSaverSurface\0".encode_utf16().collect();
 
         for (idx, target) in targets.into_iter().enumerate() {
-            let scale = prefs.scale_mode.resolve_factor(target.dpi).max(1);
-            let logical_w = (target.width / scale).max(64);
-            let logical_h = (target.height / scale).max(64);
+            let (logical_w, logical_h) = if prefs.scale_mode == ScaleMode::Classic640x480 {
+                (640, 480)
+            } else {
+                let scale = prefs.scale_mode.resolve_factor(target.dpi).max(1);
+                ((target.width / scale).max(64), (target.height / scale).max(64))
+            };
 
             let Some(mut surface) = AdSurface::new(logical_w, logical_h) else {
                 continue;
             };
-            // Capture underlying desktop so screen-effect modules (Fade/Draino/Puzzle/etc.) work 1:1
-            surface.capture_desktop(target.x, target.y, target.width, target.height);
+            let crt_scratch = if prefs.scale_mode == ScaleMode::CrtScanlines {
+                AdSurface::new(logical_w, logical_h)
+            } else {
+                None
+            };
+            // Capture underlying desktop so screen-effect modules (Fade/Draino/Puzzle/Taz/Yosemite/etc.) work 1:1
+            if prefs.scale_mode == ScaleMode::Classic640x480 {
+                let stage_w = ((target.height * 4) / 3).min(target.width);
+                let stage_x = target.x + (target.width - stage_w) / 2;
+                surface.capture_desktop(stage_x, target.y, stage_w, target.height);
+            } else {
+                surface.capture_desktop(target.x, target.y, target.width, target.height);
+            }
 
-            let mut module = factory();
+            let (mut module, raw_controls) = factory(idx);
             let meta = module.metadata();
             let mut system = AdSystem::new(logical_w, logical_h, mode);
             system.sound_enabled = prefs.sound_enabled && idx == 0; // Avoid double audio across monitors
-            system.authentic_timing = prefs.authentic_timing;
+            system.authentic_timing = prefs.frame_rate_mode == FrameRateMode::AuthenticRetro;
             system.data_dir = if prefs.path.trim().is_empty() {
                 std::env::current_exe()
                     .ok()
@@ -167,11 +178,7 @@ impl SaverSession {
                     target.y,
                     target.width,
                     target.height,
-                    if mode == SaverMode::Demo {
-                        ptr::null_mut()
-                    } else {
-                        ptr::null_mut()
-                    },
+                    ptr::null_mut(),
                     ptr::null_mut(),
                     hinst as HINSTANCE,
                     ptr::null(),
@@ -181,15 +188,14 @@ impl SaverSession {
                 continue;
             }
 
-            let frame_ms = if prefs.authentic_timing {
-                meta.target_frame_ms.max(15) as u64
-            } else {
-                16
-            };
+            let frame_ms = prefs.frame_rate_mode.resolve_frame_ms(meta.target_frame_ms);
+            let timer_ms = (frame_ms as u32).clamp(8, 15);
 
             let mut inst = Box::new(MonitorInstance {
                 hwnd,
                 surface,
+                crt_scratch,
+                scale_mode: prefs.scale_mode,
                 module,
                 system,
                 params,
@@ -231,7 +237,7 @@ impl SaverSession {
                     );
                     ShowWindow(hwnd, SW_SHOWNOACTIVATE);
                 }
-                SetTimer(hwnd, TIMER_FRAME, 15, None);
+                SetTimer(hwnd, TIMER_FRAME, timer_ms, None);
             }
 
             windows.push(hwnd);
@@ -289,6 +295,7 @@ impl SaverSession {
                 rng: &mut inst.rng,
                 elapsed_ms,
             };
+            inst.sound.stop_all();
             let _ = inst.module.do_close(&mut ctx);
             if let AdResult::PaletteRequest(kind) = inst.module.do_initialize(&mut ctx) {
                 ctx.module.palette = Some(AdPalette::build(kind));
@@ -306,6 +313,7 @@ impl SaverSession {
 
     fn teardown(&mut self) {
         for inst in &mut self.instances {
+            inst.sound.stop_all();
             let elapsed_ms = inst.started_at.elapsed().as_millis() as u64;
             let mut ctx = AdContext {
                 system: &mut inst.system,
@@ -340,14 +348,28 @@ impl Drop for SaverSession {
     }
 }
 
-fn present_window(inst: &MonitorInstance) {
+fn present_to_dc(inst: &mut MonitorInstance, hdc: windows_sys::Win32::Graphics::Gdi::HDC, w: i32, h: i32) {
+    let pillarbox = inst.scale_mode == ScaleMode::Classic640x480;
+    if inst.scale_mode == ScaleMode::CrtScanlines {
+        if let Some(ref mut scratch) = inst.crt_scratch {
+            if scratch.pixels().len() == inst.surface.pixels().len() {
+                scratch.pixels_mut().copy_from_slice(inst.surface.pixels());
+                scratch.apply_crt_scanlines();
+                scratch.present_to_hdc_styled(hdc, w, h, pillarbox);
+                return;
+            }
+        }
+    }
+    inst.surface.present_to_hdc_styled(hdc, w, h, pillarbox);
+}
+
+fn present_window(inst: &mut MonitorInstance) {
     unsafe {
         let mut rc: RECT = std::mem::zeroed();
         GetClientRect(inst.hwnd, &mut rc);
         let hdc = GetDC(inst.hwnd);
         if !hdc.is_null() {
-            inst.surface
-                .present_to_hdc(hdc, rc.right - rc.left, rc.bottom - rc.top);
+            present_to_dc(inst, hdc, rc.right - rc.left, rc.bottom - rc.top);
             ReleaseDC(inst.hwnd, hdc);
         }
     }
@@ -394,8 +416,7 @@ unsafe extern "system" fn saver_wnd_proc(
             let hdc = BeginPaint(hwnd, &mut ps);
             let mut rc: RECT = std::mem::zeroed();
             GetClientRect(hwnd, &mut rc);
-            inst.surface
-                .present_to_hdc(hdc, rc.right - rc.left, rc.bottom - rc.top);
+            present_to_dc(inst, hdc, rc.right - rc.left, rc.bottom - rc.top);
             EndPaint(hwnd, &ps);
             0
         },

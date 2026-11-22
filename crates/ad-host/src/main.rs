@@ -23,7 +23,8 @@ use std::time::{Duration, Instant};
 use ad_modules::{ModuleCatalogEntry, build_catalog, instantiate_entry};
 use ad_sdk::palette::rgb;
 use ad_sdk::prefs::{
-    AdPrefs, RandomizerEntry, UiTheme, load_random_ads, save_random_ads,
+    AdPrefs, FrameRateMode, MultiMonitorMode, RandomizerEntry, ScaleMode, UiTheme,
+    load_random_ads, save_random_ads,
 };
 use ad_sdk::sound::AdSound;
 use ad_sdk::{AdControl, SaverMode};
@@ -54,15 +55,15 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
     BM_GETCHECK, BM_SETCHECK, BS_AUTOCHECKBOX, BS_PUSHBUTTON,
     CB_ADDSTRING, CB_GETCURSEL, CB_SETCURSEL, CBS_DROPDOWNLIST, CBN_SELCHANGE, CreateWindowExW,
     CS_HREDRAW, CS_VREDRAW, DefWindowProcW, DestroyIcon, DestroyWindow, DispatchMessageW,
-    GetClientRect, GetMessageW, GetWindowLongPtrW, GWLP_USERDATA, HICON, ICON_BIG, ICON_SMALL,
-    IDC_ARROW, KillTimer, LB_ADDSTRING, LB_GETCURSEL, LB_SETCURSEL, LBN_DBLCLK, LBN_SELCHANGE,
-    LBS_NOTIFY, LoadCursorW, MSG, PostQuitMessage, RegisterClassW, SW_HIDE, SW_RESTORE, SW_SHOW,
-    SendMessageW, SetForegroundWindow, SetTimer, SetWindowLongPtrW, SetWindowTextW, ShowWindow,
-    TranslateMessage, WM_CLOSE, WM_COMMAND, WM_CTLCOLORBTN, WM_CTLCOLORLISTBOX, WM_CTLCOLORSTATIC,
-    WM_DESTROY, WM_HOTKEY, WM_HSCROLL, WM_LBUTTONUP, WM_PAINT, WM_RBUTTONUP, WM_SETFONT,
-    WM_SETICON, WM_SIZE, WM_TIMER, WM_USER, WNDCLASSW, WS_BORDER, WS_CAPTION, WS_CHILD,
-    WS_CLIPCHILDREN, WS_MINIMIZEBOX, WS_OVERLAPPED, WS_SYSMENU, WS_TABSTOP, WS_VISIBLE,
-    WS_VSCROLL, SIZE_MINIMIZED,
+    EN_CHANGE, ES_AUTOHSCROLL, GetClientRect, GetMessageW, GetWindowLongPtrW, GetWindowTextW,
+    GWLP_USERDATA, HICON, ICON_BIG, ICON_SMALL, IDC_ARROW, KillTimer, LB_ADDSTRING, LB_GETCURSEL,
+    LB_RESETCONTENT, LB_SETCURSEL, LBN_DBLCLK, LBN_SELCHANGE, LBS_NOTIFY, LoadCursorW, MSG,
+    PostQuitMessage, RegisterClassW, SW_HIDE, SW_RESTORE, SW_SHOW, SendMessageW,
+    SetForegroundWindow, SetTimer, SetWindowLongPtrW, SetWindowTextW, ShowWindow, TranslateMessage,
+    WM_CLOSE, WM_COMMAND, WM_CTLCOLORBTN, WM_CTLCOLORLISTBOX, WM_CTLCOLORSTATIC, WM_DESTROY,
+    WM_HOTKEY, WM_HSCROLL, WM_LBUTTONUP, WM_PAINT, WM_RBUTTONUP, WM_SETFONT, WM_SETICON, WM_SIZE,
+    WM_TIMER, WM_USER, WNDCLASSW, WS_BORDER, WS_CAPTION, WS_CHILD, WS_CLIPCHILDREN,
+    WS_MINIMIZEBOX, WS_OVERLAPPED, WS_SYSMENU, WS_TABSTOP, WS_VISIBLE, WS_VSCROLL, SIZE_MINIMIZED,
 };
 
 const TBM_GETPOS: u32 = WM_USER;
@@ -86,6 +87,9 @@ const ID_BTN_SLEEP: i32 = 1004;
 const ID_BTN_THEME: i32 = 1005;
 const ID_BTN_ABOUT: i32 = 1006;
 const ID_BTN_TRAY: i32 = 1007;
+const ID_COMBO_PACK: i32 = 1008;
+const ID_EDIT_SEARCH: i32 = 1009;
+const ID_BTN_FAV: i32 = 1010;
 
 // Dynamic control slots 0..3 -> IDs 2000..2003
 const ID_CTRL_BASE: i32 = 2000;
@@ -159,6 +163,9 @@ struct AppState {
     random_ads_path: PathBuf,
     prefs: AdPrefs,
     catalog: Vec<ModuleCatalogEntry>,
+    filtered_indices: Vec<usize>,
+    pack_filter_idx: i32,
+    search_query: String,
     selected_idx: usize,
     randomizer_pool: Vec<String>,
     art: Option<HostArt>,
@@ -183,6 +190,9 @@ struct AppState {
     icon_small: HICON,
 
     // Persistent child controls
+    hwnd_pack_filter: HWND,
+    hwnd_search: HWND,
+    hwnd_btn_fav: HWND,
     hwnd_list: HWND,
     hwnd_btn_when: HWND,
     hwnd_btn_demo: HWND,
@@ -283,6 +293,9 @@ impl AppState {
 
             let font = self.current_font(false);
             for hw in [
+                self.hwnd_pack_filter,
+                self.hwnd_search,
+                self.hwnd_btn_fav,
                 self.hwnd_list,
                 self.hwnd_btn_when,
                 self.hwnd_btn_demo,
@@ -311,6 +324,90 @@ impl AppState {
             }
             InvalidateRect(self.hwnd, ptr::null(), 1);
         }
+    }
+
+    fn update_fav_button_label(&self) {
+        if self.hwnd_btn_fav.is_null() {
+            return;
+        }
+        let cur_id = &self.selected_entry().meta.id;
+        let is_fav = self.prefs.favorites.iter().any(|f| f == cur_id);
+        let lbl = wide(if is_fav { "★ Fav" } else { "☆ Fav" });
+        unsafe {
+            SetWindowTextW(self.hwnd_btn_fav, lbl.as_ptr());
+        }
+    }
+
+    fn refresh_filtered_list(&mut self) {
+        if self.hwnd_list.is_null() {
+            return;
+        }
+        let q = self.search_query.trim().to_ascii_lowercase();
+        let cur_id = self.selected_entry().meta.id.clone();
+
+        self.filtered_indices.clear();
+        unsafe {
+            SendMessageW(self.hwnd_list, LB_RESETCONTENT, 0, 0);
+        }
+
+        let mut new_lb_sel: Option<usize> = None;
+        for (cat_idx, entry) in self.catalog.iter().enumerate() {
+            let id = &entry.meta.id;
+            let is_simpsons = id.starts_with("simpsons_");
+            let is_tng = id.starts_with("tng_");
+            let is_looney = id.starts_with("looney_");
+            let is_classic = !is_simpsons && !is_tng && !is_looney;
+            let is_fav = self.prefs.favorites.iter().any(|f| f == id);
+
+            let pack_ok = match self.pack_filter_idx {
+                1 => is_classic,
+                2 => is_simpsons,
+                3 => is_tng,
+                4 => is_looney,
+                5 => is_fav,
+                _ => true,
+            };
+            if !pack_ok {
+                continue;
+            }
+            if !q.is_empty()
+                && !entry.meta.name.to_ascii_lowercase().contains(&q)
+                && !id.to_ascii_lowercase().contains(&q)
+            {
+                continue;
+            }
+
+            let lb_idx = self.filtered_indices.len();
+            self.filtered_indices.push(cat_idx);
+            if *id == cur_id {
+                new_lb_sel = Some(lb_idx);
+            }
+            let display = if is_fav {
+                format!("★ {}", entry.meta.name)
+            } else {
+                entry.meta.name.clone()
+            };
+            let nw = wide(&display);
+            unsafe {
+                SendMessageW(self.hwnd_list, LB_ADDSTRING, 0, nw.as_ptr() as LPARAM);
+            }
+        }
+
+        if let Some(sel) = new_lb_sel {
+            unsafe {
+                SendMessageW(self.hwnd_list, LB_SETCURSEL, sel, 0);
+            }
+        } else if let Some(&first_cat_idx) = self.filtered_indices.first() {
+            self.selected_idx = first_cat_idx;
+            let entry = self.selected_entry().clone();
+            self.prefs.module_name = entry.meta.name.clone();
+            self.prefs.module_file = entry.meta.filename.clone();
+            unsafe {
+                SendMessageW(self.hwnd_list, LB_SETCURSEL, 0, 0);
+            }
+            self.rebuild_module_controls();
+        }
+        self.update_fav_button_label();
     }
 
     fn rebuild_module_controls(&mut self) {
@@ -524,6 +621,7 @@ impl AppState {
         unsafe {
             InvalidateRect(self.hwnd, ptr::null(), 1);
         }
+        self.update_fav_button_label();
     }
 
     fn update_demo_button_label(&self) {
@@ -547,20 +645,52 @@ impl AppState {
 
     fn start_session(&mut self, mode: SaverMode) {
         self.stop_session();
-        let entry = self.selected_entry().clone();
-        let raw_vals = self.current_raw_controls(&entry);
+        let primary_entry = self.selected_entry().clone();
+        let primary_vals = self.current_raw_controls(&primary_entry);
         let pool = self.randomizer_pool.clone();
         let all_ctrls = self.prefs.module_controls.clone();
+        let catalog = self.catalog.clone();
+        let diff_per_mon = self.prefs.multi_monitor == MultiMonitorMode::DifferentPerMonitor;
 
         let sess = SaverSession::start(
             self.hwnd,
             mode,
             &self.prefs,
-            raw_vals,
             &self.sound,
-            || {
-                instantiate_entry(&entry, &pool, &all_ctrls)
-                    .unwrap_or_else(|| Box::new(ad_modules::toasters::ToastersModule::new()))
+            |mon_idx| {
+                if diff_per_mon && mon_idx > 0 {
+                    let candidates: Vec<&ModuleCatalogEntry> = catalog
+                        .iter()
+                        .filter(|e| {
+                            e.meta.id != "randomizer"
+                                && e.meta.id != primary_entry.meta.id
+                                && (pool.is_empty() || pool.contains(&e.meta.id))
+                        })
+                        .collect();
+                    let chosen = if !candidates.is_empty() {
+                        let seed = (std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .map(|d| d.as_millis() as usize)
+                            .unwrap_or(0))
+                            .wrapping_add(mon_idx.wrapping_mul(37));
+                        candidates[seed % candidates.len()]
+                    } else {
+                        &primary_entry
+                    };
+                    let vals = all_ctrls.get(&chosen.meta.id).copied().unwrap_or([
+                        chosen.meta.controls[0].default_raw(),
+                        chosen.meta.controls[1].default_raw(),
+                        chosen.meta.controls[2].default_raw(),
+                        chosen.meta.controls[3].default_raw(),
+                    ]);
+                    let m = instantiate_entry(chosen, &pool, &all_ctrls)
+                        .unwrap_or_else(|| Box::new(ad_modules::toasters::ToastersModule::new()));
+                    (m, vals)
+                } else {
+                    let m = instantiate_entry(&primary_entry, &pool, &all_ctrls)
+                        .unwrap_or_else(|| Box::new(ad_modules::toasters::ToastersModule::new()));
+                    (m, primary_vals)
+                }
             },
         );
         self.session = sess;
@@ -838,7 +968,7 @@ impl AppState {
                 DT_LEFT | DT_WORDBREAK | DT_NOPREFIX,
             );
 
-            // Status strip: Timeout, Hot Corners, Scale, Multi-Monitor
+            // Status strip: Timeout, Hot Corners, Scale, Frame Rate
             SetTextColor(hdc, muted_col);
             let corners_txt = if self.prefs.no_corners {
                 "Corners: Off".to_string()
@@ -849,16 +979,22 @@ impl AppState {
                     self.prefs.wake_corner.label()
                 )
             };
+            let fps_txt = match self.prefs.frame_rate_mode {
+                FrameRateMode::AuthenticRetro => "Retro FPS",
+                FrameRateMode::Smooth60Fps => "60 FPS",
+                FrameRateMode::HighRefresh120Fps => "120 FPS",
+            };
+            let scale_txt = match self.prefs.scale_mode {
+                ScaleMode::Auto => "Auto",
+                ScaleMode::Scale1x => "1x",
+                ScaleMode::Scale2x => "2x",
+                ScaleMode::Scale3x => "3x",
+                ScaleMode::Classic640x480 => "640x480 4:3",
+                ScaleMode::CrtScanlines => "2x CRT",
+            };
             let status_txt = format!(
-                "Idle: {}m  |  {}  |  Scale: {}",
-                self.prefs.timeout_minutes,
-                corners_txt,
-                match self.prefs.scale_mode {
-                    ad_sdk::prefs::ScaleMode::Auto => "Auto",
-                    ad_sdk::prefs::ScaleMode::Scale1x => "1x",
-                    ad_sdk::prefs::ScaleMode::Scale2x => "2x",
-                    ad_sdk::prefs::ScaleMode::Scale3x => "3x",
-                }
+                "Idle: {}m  |  {}  |  {} ({})",
+                self.prefs.timeout_minutes, corners_txt, scale_txt, fps_txt,
             );
             let w_stat = wide(&status_txt);
             let mut r_stat = RECT {
@@ -1141,7 +1277,66 @@ fn main() {
         }
     };
 
-    // Module ListBox inside list_panel
+    // Collection Filter ComboBox, Favorite Toggle Button, Live Search Box, and Module ListBox inside list_panel
+    let hwnd_pack_filter = unsafe {
+        let cb = CreateWindowExW(
+            0,
+            wide("COMBOBOX").as_ptr(),
+            ptr::null(),
+            WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST as u32,
+            layout.list_panel.left + sc(8),
+            layout.list_panel.top + sc(8),
+            (layout.list_panel.right - layout.list_panel.left) - sc(68),
+            sc(180),
+            hwnd,
+            ID_COMBO_PACK as isize as _,
+            hinst,
+            ptr::null(),
+        );
+        for lbl in [
+            "All Collections (77)",
+            "Classic 1991 (37)",
+            "The Simpsons (15)",
+            "Star Trek: TNG (13)",
+            "Looney Tunes (12)",
+            "★ Favorites",
+        ] {
+            let lw = wide(lbl);
+            SendMessageW(cb, CB_ADDSTRING, 0, lw.as_ptr() as LPARAM);
+        }
+        SendMessageW(cb, CB_SETCURSEL, 0, 0);
+        cb
+    };
+
+    let hwnd_btn_fav = make_btn(
+        "☆ Fav",
+        layout.list_panel.right - sc(56),
+        layout.list_panel.top + sc(8),
+        sc(48),
+        sc(23),
+        ID_BTN_FAV,
+    );
+
+    let hwnd_search = unsafe {
+        let ed = CreateWindowExW(
+            0,
+            wide("EDIT").as_ptr(),
+            ptr::null(),
+            WS_CHILD | WS_VISIBLE | WS_BORDER | WS_TABSTOP | ES_AUTOHSCROLL as u32,
+            layout.list_panel.left + sc(8),
+            layout.list_panel.top + sc(34),
+            (layout.list_panel.right - layout.list_panel.left) - sc(16),
+            sc(22),
+            hwnd,
+            ID_EDIT_SEARCH as isize as _,
+            hinst,
+            ptr::null(),
+        );
+        let cue = wide("Search 77 modules...");
+        SendMessageW(ed, 0x1501, 0, cue.as_ptr() as LPARAM); // EM_SETCUEBANNER
+        ed
+    };
+
     let hwnd_list = unsafe {
         CreateWindowExW(
             0,
@@ -1149,24 +1344,15 @@ fn main() {
             ptr::null(),
             WS_CHILD | WS_VISIBLE | WS_BORDER | WS_VSCROLL | WS_TABSTOP | LBS_NOTIFY as u32,
             layout.list_panel.left + sc(8),
-            layout.list_panel.top + sc(8),
+            layout.list_panel.top + sc(60),
             (layout.list_panel.right - layout.list_panel.left) - sc(16),
-            (layout.list_panel.bottom - layout.list_panel.top) - sc(16),
+            (layout.list_panel.bottom - layout.list_panel.top) - sc(68),
             hwnd,
             ID_LIST_MODULES as isize as _,
             hinst,
             ptr::null(),
         )
     };
-    for entry in &catalog {
-        let nw = wide(&entry.meta.name);
-        unsafe {
-            SendMessageW(hwnd_list, LB_ADDSTRING, 0, nw.as_ptr() as LPARAM);
-        }
-    }
-    unsafe {
-        SendMessageW(hwnd_list, LB_SETCURSEL, selected_idx, 0);
-    }
 
     // "When..." button inside power_panel
     let hwnd_btn_when = make_btn(
@@ -1226,6 +1412,10 @@ fn main() {
         ID_BTN_TRAY,
     );
 
+    let sound = AdSound::new();
+    sound.set_volumes(prefs.sfx_volume, prefs.midi_volume);
+    let filtered_indices: Vec<usize> = (0..catalog.len()).collect();
+
     let mut state = Box::new(AppState {
         hwnd,
         dpi_scale,
@@ -1235,10 +1425,13 @@ fn main() {
         random_ads_path,
         prefs: prefs.clone(),
         catalog,
+        filtered_indices,
+        pack_filter_idx: 0,
+        search_query: String::new(),
         selected_idx,
         randomizer_pool,
         art: HostArt::load(),
-        sound: AdSound::new(),
+        sound,
         tray: Some(TrayIcon::new(hwnd, prefs.screen_saver_on)),
         session: None,
         sleep_corner_since: None,
@@ -1255,6 +1448,9 @@ fn main() {
         brush_modern_card: unsafe { CreateSolidBrush(rgb(42, 42, 46)) },
         icon_big,
         icon_small,
+        hwnd_pack_filter,
+        hwnd_search,
+        hwnd_btn_fav,
         hwnd_list,
         hwnd_btn_when,
         hwnd_btn_demo,
@@ -1265,6 +1461,7 @@ fn main() {
         slots: Default::default(),
     });
 
+    state.refresh_filtered_list();
     state.rebuild_module_controls();
     state.apply_window_theme();
     state.sync_hotkey();
@@ -1414,6 +1611,7 @@ unsafe extern "system" fn main_wnd_proc(
                                     hwnd,
                                     &st.catalog,
                                     &st.randomizer_pool,
+                                    &st.prefs.favorites,
                                 ) {
                                     st.randomizer_pool = new_pool;
                                     st.save_all();
@@ -1480,25 +1678,62 @@ unsafe extern "system" fn main_wnd_proc(
             }
 
             match id as usize {
+                x if x == ID_COMBO_PACK as usize => {
+                    if code == CBN_SELCHANGE {
+                        let sel =
+                            unsafe { SendMessageW(st.hwnd_pack_filter, CB_GETCURSEL, 0, 0) } as i32;
+                        if sel >= 0 {
+                            st.pack_filter_idx = sel;
+                            st.refresh_filtered_list();
+                        }
+                    }
+                }
+                x if x == ID_EDIT_SEARCH as usize => {
+                    if code == EN_CHANGE {
+                        let mut buf = [0u16; 128];
+                        let len = unsafe {
+                            GetWindowTextW(st.hwnd_search, buf.as_mut_ptr(), buf.len() as i32)
+                        };
+                        st.search_query = if len > 0 {
+                            String::from_utf16_lossy(&buf[..len as usize])
+                        } else {
+                            String::new()
+                        };
+                        st.refresh_filtered_list();
+                    }
+                }
+                x if x == ID_BTN_FAV as usize => {
+                    let cur_id = st.selected_entry().meta.id.clone();
+                    if let Some(pos) = st.prefs.favorites.iter().position(|f| *f == cur_id) {
+                        st.prefs.favorites.remove(pos);
+                    } else {
+                        st.prefs.favorites.push(cur_id);
+                    }
+                    st.save_all();
+                    st.refresh_filtered_list();
+                }
                 x if x == ID_LIST_MODULES as usize => {
                     if code == LBN_SELCHANGE || code == LBN_DBLCLK {
                         let sel = unsafe { SendMessageW(st.hwnd_list, LB_GETCURSEL, 0, 0) } as i32;
-                        if sel >= 0 && (sel as usize) < st.catalog.len() {
-                            st.selected_idx = sel as usize;
-                            let entry = st.selected_entry().clone();
-                            st.prefs.module_name = entry.meta.name.clone();
-                            st.prefs.module_file = entry.meta.filename.clone();
-                            st.rebuild_module_controls();
-                            st.save_all();
-                            if code == LBN_DBLCLK {
-                                st.start_session(SaverMode::Demo);
-                            } else if st
-                                .session
-                                .as_ref()
-                                .map(|s| s.mode() == SaverMode::Demo)
-                                .unwrap_or(false)
-                            {
-                                st.start_session(SaverMode::Demo);
+                        if sel >= 0 && (sel as usize) < st.filtered_indices.len() {
+                            let cat_idx = st.filtered_indices[sel as usize];
+                            if cat_idx < st.catalog.len() {
+                                st.selected_idx = cat_idx;
+                                let entry = st.selected_entry().clone();
+                                st.prefs.module_name = entry.meta.name.clone();
+                                st.prefs.module_file = entry.meta.filename.clone();
+                                st.rebuild_module_controls();
+                                st.save_all();
+                                if code == LBN_DBLCLK {
+                                    st.start_session(SaverMode::Demo);
+                                } else if st
+                                    .session
+                                    .as_ref()
+                                    .map(|s| s.mode() == SaverMode::Demo)
+                                    .unwrap_or(false)
+                                {
+                                    st.start_session(SaverMode::Demo);
+                                }
                             }
                         }
                     }
@@ -1519,7 +1754,9 @@ unsafe extern "system" fn main_wnd_proc(
                     st.start_session(SaverMode::Saver);
                 }
                 x if x == ID_BTN_WHEN as usize => {
-                    if setup_dlg::show_setup_dialog(hwnd, &mut st.prefs) {
+                    if setup_dlg::show_setup_dialog(hwnd, &mut st.prefs, &st.sound) {
+                        st.sound
+                            .set_volumes(st.prefs.sfx_volume, st.prefs.midi_volume);
                         st.apply_window_theme();
                         st.sync_hotkey();
                         st.save_all();

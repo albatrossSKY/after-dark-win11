@@ -83,7 +83,7 @@ pub fn enumerate_monitors() -> Vec<DisplayTarget> {
 pub fn resolve_targets(mode: MultiMonitorMode) -> Vec<DisplayTarget> {
     let monitors = enumerate_monitors();
     match mode {
-        MultiMonitorMode::PerMonitor => monitors,
+        MultiMonitorMode::PerMonitor | MultiMonitorMode::DifferentPerMonitor => monitors,
         MultiMonitorMode::PrimaryOnly => {
             if let Some(p) = monitors.iter().find(|m| m.is_primary) {
                 vec![p.clone()]

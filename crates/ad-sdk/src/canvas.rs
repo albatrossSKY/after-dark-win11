@@ -783,8 +783,47 @@ impl AdSurface {
 
     /// Present the offscreen surface to a destination window `HDC` using crisp nearest-neighbor scaling.
     pub fn present_to_hdc(&self, dst_hdc: HDC, dst_w: i32, dst_h: i32) {
+        self.present_to_hdc_styled(dst_hdc, dst_w, dst_h, false);
+    }
+
+    /// Present the offscreen surface with optional 4:3 centered stage aspect ratio lock (`pillarbox_4_3`).
+    pub fn present_to_hdc_styled(
+        &self,
+        dst_hdc: HDC,
+        dst_w: i32,
+        dst_h: i32,
+        pillarbox_4_3: bool,
+    ) {
         unsafe {
-            if self.width == dst_w && self.height == dst_h {
+            if pillarbox_4_3 && dst_w > 0 && dst_h > 0 {
+                let stage_w = ((dst_h * 4) / 3).min(dst_w);
+                let stage_x = (dst_w - stage_w) / 2;
+                if stage_x > 0 {
+                    PatBlt(dst_hdc, 0, 0, stage_x, dst_h, BLACKNESS);
+                    PatBlt(
+                        dst_hdc,
+                        stage_x + stage_w,
+                        0,
+                        dst_w - (stage_x + stage_w),
+                        dst_h,
+                        BLACKNESS,
+                    );
+                }
+                SetStretchBltMode(dst_hdc, COLORONCOLOR);
+                StretchBlt(
+                    dst_hdc,
+                    stage_x,
+                    0,
+                    stage_w,
+                    dst_h,
+                    self.hdc,
+                    0,
+                    0,
+                    self.width,
+                    self.height,
+                    SRCCOPY,
+                );
+            } else if self.width == dst_w && self.height == dst_h {
                 BitBlt(dst_hdc, 0, 0, dst_w, dst_h, self.hdc, 0, 0, SRCCOPY);
             } else {
                 SetStretchBltMode(dst_hdc, COLORONCOLOR);
@@ -802,6 +841,26 @@ impl AdSurface {
                     SRCCOPY,
                 );
             }
+        }
+    }
+
+    /// Apply a subtle retro CRT phosphor scanline effect to every odd scanline in the surface.
+    pub fn apply_crt_scanlines(&mut self) {
+        let w = self.width as usize;
+        let h = self.height as usize;
+        let px = self.pixels_mut();
+        let mut y = 1usize;
+        while y < h {
+            let row = y * w;
+            for x in 0..w {
+                let c = px[row + x];
+                // Dim odd scanlines by ~25% (`(c * 3) / 4` per channel)
+                let r = (((c >> 16) & 0xFF) * 3) >> 2;
+                let g = (((c >> 8) & 0xFF) * 3) >> 2;
+                let b = ((c & 0xFF) * 3) >> 2;
+                px[row + x] = (r << 16) | (g << 8) | b;
+            }
+            y += 2;
         }
     }
 

@@ -245,18 +245,18 @@ fn draw_centered_label(surface: &mut AdSurface, x: i32, y: i32, w: i32, h: i32, 
 }
 
 #[test]
-fn verify_all_37_modules_and_render_contact_sheets() {
+fn verify_all_65_modules_and_render_contact_sheets() {
     let root = workspace_root();
     let assets_dir = root.join("assets");
     let snap_dir = root.join("target/verify_snapshots");
     fs::create_dir_all(&snap_dir).unwrap();
 
-    // 1. Verify catalog completeness (all 37 built-in modules!)
+    // 1. Verify catalog completeness (all 77 built-in modules: 37 classic 1991 + 15 Simpsons + 13 Star Trek TNG + 12 Looney Tunes!)
     let catalog = build_catalog(None);
     assert_eq!(
         catalog.len(),
-        37,
-        "Expected all 37 built-in modules, got {}",
+        77,
+        "Expected all 77 built-in modules (37 After Dark 1.0a + 15 Simpsons + 13 Star Trek TNG + 12 Looney Tunes), got {}",
         catalog.len()
     );
     let mut seen_ids = BTreeSet::new();
@@ -453,7 +453,7 @@ fn verify_all_37_modules_and_render_contact_sheets() {
     let cell_h = tile_h + hdr_h + pad;
 
     let chunks: Vec<&[(String, String, AdSurface)]> = rendered.chunks(10).collect();
-    assert_eq!(chunks.len(), 4);
+    assert_eq!(chunks.len(), 8);
 
     for (sheet_idx, chunk) in chunks.iter().enumerate() {
         let rows = ((chunk.len() as i32) + cols - 1) / cols;
@@ -499,5 +499,297 @@ fn verify_all_37_modules_and_render_contact_sheets() {
 
         let out_path = snap_dir.join(format!("sheet_{}.png", sheet_idx + 1));
         write_surface_png(&sheet, &out_path);
+    }
+
+    // 6. Also render dedicated high-res 640x480 contact sheets of ALL 15 Simpsons modules!
+    let sim_w = 640i32;
+    let sim_h = 480i32;
+    let mut sim_rendered: Vec<(String, String, AdSurface)> = Vec::new();
+    let simpsons_entries: Vec<_> = catalog
+        .iter()
+        .filter(|e| e.meta.id.starts_with("simpsons_"))
+        .collect();
+    assert_eq!(simpsons_entries.len(), 15);
+
+    for (idx, entry) in simpsons_entries.iter().enumerate() {
+        let mut module = create_module_by_id(&entry.meta.id, &rand_pool, &empty_ctrls).unwrap();
+        let meta = module.metadata();
+        let mut surface = AdSurface::new(sim_w, sim_h).unwrap();
+        paint_synthetic_win31_desktop(&mut surface);
+
+        let mut system = AdSystem::new(sim_w, sim_h, SaverMode::Saver);
+        system.sound_enabled = false;
+        system.data_dir = assets_dir.to_string_lossy().to_string();
+        let mut params = AdModuleParams::new(sim_w, sim_h, &meta.controls);
+        let mut rng = MsvcRand::new(1994 + (idx as u32) * 53);
+
+        let step_ms = meta.target_frame_ms.max(16) as u64;
+        let frames: usize = match meta.id.as_str() {
+            "simpsons_chalkboard" => 110,
+            "simpsons_how_to_draw" => 95,
+            "simpsons_homer_eats" => 85,
+            "simpsons_objets_bart" => 95,
+            "simpsons_trivia" => 40,
+            _ => 65,
+        };
+        {
+            let mut ctx = AdContext {
+                system: &mut system,
+                module: &mut params,
+                surface: &mut surface,
+                sound: &sound,
+                rng: &mut rng,
+                elapsed_ms: 0,
+            };
+            let _ = module.do_initialize(&mut ctx);
+            let _ = module.do_blank(&mut ctx);
+        }
+        for f in 1..=frames {
+            let mut ctx = AdContext {
+                system: &mut system,
+                module: &mut params,
+                surface: &mut surface,
+                sound: &sound,
+                rng: &mut rng,
+                elapsed_ms: (f as u64) * step_ms,
+            };
+            let _ = module.do_draw_frame(&mut ctx);
+        }
+        let snap = surface.clone_surface().unwrap();
+        {
+            let mut ctx = AdContext {
+                system: &mut system,
+                module: &mut params,
+                surface: &mut surface,
+                sound: &sound,
+                rng: &mut rng,
+                elapsed_ms: (frames as u64) * step_ms,
+            };
+            let _ = module.do_close(&mut ctx);
+        }
+        sim_rendered.push((meta.name, meta.id, snap));
+    }
+
+    let s_cols = 3i32;
+    let s_cell_w = sim_w + pad;
+    let s_cell_h = sim_h + hdr_h + pad;
+    for (si, chunk) in sim_rendered.chunks(9).enumerate() {
+        let rows = ((chunk.len() as i32) + s_cols - 1) / s_cols;
+        let sw = s_cols * s_cell_w + pad;
+        let sh = rows * s_cell_h + pad;
+        let mut sheet = AdSurface::new(sw, sh).unwrap();
+        sheet.fill_rect_rgb(0, 0, sw, sh, rgb(20, 24, 34));
+        for (i, (name, id, tile)) in chunk.iter().enumerate() {
+            let c = (i as i32) % s_cols;
+            let r = (i as i32) / s_cols;
+            let x = pad + c * s_cell_w;
+            let y = pad + r * s_cell_h;
+            sheet.fill_rect_rgb(x, y, x + sim_w, y + hdr_h, rgb(180, 130, 12));
+            draw_centered_label(&mut sheet, x, y, sim_w, hdr_h, &format!("{} ({})", name, id));
+            unsafe {
+                BitBlt(
+                    sheet.hdc(),
+                    x,
+                    y + hdr_h,
+                    sim_w,
+                    sim_h,
+                    tile.hdc(),
+                    0,
+                    0,
+                    ROP_SRCCOPY,
+                );
+            }
+        }
+        write_surface_png(&sheet, &snap_dir.join(format!("simpsons_sheet_{}.png", si + 1)));
+    }
+
+    // 7. Also render dedicated high-res 640x480 contact sheets of ALL 13 Star Trek: TNG modules!
+    let mut tng_rendered: Vec<(String, String, AdSurface)> = Vec::new();
+    let tng_entries: Vec<_> = catalog
+        .iter()
+        .filter(|e| e.meta.id.starts_with("tng_"))
+        .collect();
+    assert_eq!(tng_entries.len(), 13);
+
+    for (idx, entry) in tng_entries.iter().enumerate() {
+        let mut module = create_module_by_id(&entry.meta.id, &rand_pool, &empty_ctrls).unwrap();
+        let meta = module.metadata();
+        let mut surface = AdSurface::new(sim_w, sim_h).unwrap();
+        paint_synthetic_win31_desktop(&mut surface);
+
+        let mut system = AdSystem::new(sim_w, sim_h, SaverMode::Saver);
+        system.sound_enabled = false;
+        system.data_dir = assets_dir.to_string_lossy().to_string();
+        let mut params = AdModuleParams::new(sim_w, sim_h, &meta.controls);
+        let mut rng = MsvcRand::new(1701 + (idx as u32) * 47);
+
+        let step_ms = meta.target_frame_ms.max(16) as u64;
+        let frames: usize = match meta.id.as_str() {
+            "tng_borg" => 95,
+            "tng_nanites" => 95,
+            "tng_warp_effect" => 75,
+            "tng_tachyon" => 75,
+            _ => 55,
+        };
+        {
+            let mut ctx = AdContext {
+                system: &mut system,
+                module: &mut params,
+                surface: &mut surface,
+                sound: &sound,
+                rng: &mut rng,
+                elapsed_ms: 0,
+            };
+            let _ = module.do_initialize(&mut ctx);
+            let _ = module.do_blank(&mut ctx);
+        }
+        for f in 1..=frames {
+            let mut ctx = AdContext {
+                system: &mut system,
+                module: &mut params,
+                surface: &mut surface,
+                sound: &sound,
+                rng: &mut rng,
+                elapsed_ms: (f as u64) * step_ms,
+            };
+            let _ = module.do_draw_frame(&mut ctx);
+        }
+        let snap = surface.clone_surface().unwrap();
+        {
+            let mut ctx = AdContext {
+                system: &mut system,
+                module: &mut params,
+                surface: &mut surface,
+                sound: &sound,
+                rng: &mut rng,
+                elapsed_ms: (frames as u64) * step_ms,
+            };
+            let _ = module.do_close(&mut ctx);
+        }
+        tng_rendered.push((meta.name, meta.id, snap));
+    }
+
+    for (si, chunk) in tng_rendered.chunks(9).enumerate() {
+        let rows = ((chunk.len() as i32) + s_cols - 1) / s_cols;
+        let sw = s_cols * s_cell_w + pad;
+        let sh = rows * s_cell_h + pad;
+        let mut sheet = AdSurface::new(sw, sh).unwrap();
+        sheet.fill_rect_rgb(0, 0, sw, sh, rgb(12, 16, 28));
+        for (i, (name, id, tile)) in chunk.iter().enumerate() {
+            let c = (i as i32) % s_cols;
+            let r = (i as i32) / s_cols;
+            let x = pad + c * s_cell_w;
+            let y = pad + r * s_cell_h;
+            sheet.fill_rect_rgb(x, y, x + sim_w, y + hdr_h, rgb(155, 85, 195));
+            draw_centered_label(&mut sheet, x, y, sim_w, hdr_h, &format!("{} ({})", name, id));
+            unsafe {
+                BitBlt(
+                    sheet.hdc(),
+                    x,
+                    y + hdr_h,
+                    sim_w,
+                    sim_h,
+                    tile.hdc(),
+                    0,
+                    0,
+                    ROP_SRCCOPY,
+                );
+            }
+        }
+        write_surface_png(&sheet, &snap_dir.join(format!("tng_sheet_{}.png", si + 1)));
+    }
+
+    // 8. Also render dedicated high-res 640x480 contact sheets of ALL 12 Looney Tunes modules!
+    let mut looney_rendered: Vec<(String, String, AdSurface)> = Vec::new();
+    let looney_entries: Vec<_> = catalog
+        .iter()
+        .filter(|e| e.meta.id.starts_with("looney_"))
+        .collect();
+    assert_eq!(looney_entries.len(), 12);
+
+    for (idx, entry) in looney_entries.iter().enumerate() {
+        let mut module = create_module_by_id(&entry.meta.id, &rand_pool, &empty_ctrls).unwrap();
+        let meta = module.metadata();
+        let mut surface = AdSurface::new(sim_w, sim_h).unwrap();
+        paint_synthetic_win31_desktop(&mut surface);
+
+        let mut system = AdSystem::new(sim_w, sim_h, SaverMode::Saver);
+        system.sound_enabled = false;
+        system.data_dir = assets_dir.to_string_lossy().to_string();
+        let mut params = AdModuleParams::new(sim_w, sim_h, &meta.controls);
+        let mut rng = MsvcRand::new(1995 + (idx as u32) * 61);
+
+        let step_ms = meta.target_frame_ms.max(16) as u64;
+        let frames: usize = match meta.id.as_str() {
+            "looney_acme_shopping" => 65,
+            "looney_wockets" => 40,
+            _ => 55,
+        };
+        {
+            let mut ctx = AdContext {
+                system: &mut system,
+                module: &mut params,
+                surface: &mut surface,
+                sound: &sound,
+                rng: &mut rng,
+                elapsed_ms: 0,
+            };
+            let _ = module.do_initialize(&mut ctx);
+            let _ = module.do_blank(&mut ctx);
+        }
+        for f in 1..=frames {
+            let mut ctx = AdContext {
+                system: &mut system,
+                module: &mut params,
+                surface: &mut surface,
+                sound: &sound,
+                rng: &mut rng,
+                elapsed_ms: (f as u64) * step_ms,
+            };
+            let _ = module.do_draw_frame(&mut ctx);
+        }
+        let snap = surface.clone_surface().unwrap();
+        {
+            let mut ctx = AdContext {
+                system: &mut system,
+                module: &mut params,
+                surface: &mut surface,
+                sound: &sound,
+                rng: &mut rng,
+                elapsed_ms: (frames as u64) * step_ms,
+            };
+            let _ = module.do_close(&mut ctx);
+        }
+        looney_rendered.push((meta.name, meta.id, snap));
+    }
+
+    for (si, chunk) in looney_rendered.chunks(6).enumerate() {
+        let rows = ((chunk.len() as i32) + s_cols - 1) / s_cols;
+        let sw = s_cols * s_cell_w + pad;
+        let sh = rows * s_cell_h + pad;
+        let mut sheet = AdSurface::new(sw, sh).unwrap();
+        sheet.fill_rect_rgb(0, 0, sw, sh, rgb(18, 14, 24));
+        for (i, (name, id, tile)) in chunk.iter().enumerate() {
+            let c = (i as i32) % s_cols;
+            let r = (i as i32) / s_cols;
+            let x = pad + c * s_cell_w;
+            let y = pad + r * s_cell_h;
+            sheet.fill_rect_rgb(x, y, x + sim_w, y + hdr_h, rgb(195, 52, 28));
+            draw_centered_label(&mut sheet, x, y, sim_w, hdr_h, &format!("{} ({})", name, id));
+            unsafe {
+                BitBlt(
+                    sheet.hdc(),
+                    x,
+                    y + hdr_h,
+                    sim_w,
+                    sim_h,
+                    tile.hdc(),
+                    0,
+                    0,
+                    ROP_SRCCOPY,
+                );
+            }
+        }
+        write_surface_png(&sheet, &snap_dir.join(format!("looney_sheet_{}.png", si + 1)));
     }
 }

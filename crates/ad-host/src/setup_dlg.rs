@@ -9,7 +9,10 @@ use ad_modules::message::{
     MESSAGE_SLOT_COUNT, MessageRecord, load_messages_ads, serialize_messages_ads,
 };
 use ad_modules::ModuleCatalogEntry;
-use ad_sdk::prefs::{AdPrefs, MultiMonitorMode, ScaleMode, ScreenCorner, UiTheme};
+use ad_sdk::prefs::{
+    AdPrefs, FrameRateMode, MultiMonitorMode, ScaleMode, ScreenCorner, UiTheme,
+};
+use ad_sdk::sound::AdSound;
 use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, MAX_PATH, WPARAM};
 use windows_sys::Win32::Graphics::Gdi::{
     COLOR_BTNFACE, DEFAULT_GUI_FONT, GetStockObject, HBRUSH,
@@ -67,11 +70,15 @@ const ID_HOTKEY_ON: i32 = 105;
 const ID_SCALE_MODE: i32 = 106;
 const ID_MULTIMON: i32 = 107;
 const ID_SOUND_ON: i32 = 108;
-const ID_TIMING_ON: i32 = 109;
+const ID_FPS_MODE: i32 = 109;
 const ID_THEME_MODE: i32 = 110;
+const ID_SFX_VOL: i32 = 111;
+const ID_MIDI_VOL: i32 = 112;
+const ID_TEST_AUDIO: i32 = 113;
 
 struct SetupDialogState {
     prefs: AdPrefs,
+    sound: AdSound,
     accepted: bool,
     done: bool,
     hwnd_timeout: HWND,
@@ -81,16 +88,19 @@ struct SetupDialogState {
     hwnd_hotkey_on: HWND,
     hwnd_scale: HWND,
     hwnd_multimon: HWND,
+    hwnd_fps: HWND,
     hwnd_sound: HWND,
-    hwnd_timing: HWND,
+    hwnd_sfx_vol: HWND,
+    hwnd_midi_vol: HWND,
     hwnd_theme: HWND,
 }
 
-pub fn show_setup_dialog(owner: HWND, prefs: &mut AdPrefs) -> bool {
+pub fn show_setup_dialog(owner: HWND, prefs: &mut AdPrefs, sound: &AdSound) -> bool {
     register_modal_class("AfterDarkSetupDlgClass", setup_dlg_proc);
 
     let mut state = Box::new(SetupDialogState {
         prefs: prefs.clone(),
+        sound: sound.clone(),
         accepted: false,
         done: false,
         hwnd_timeout: ptr::null_mut(),
@@ -100,24 +110,26 @@ pub fn show_setup_dialog(owner: HWND, prefs: &mut AdPrefs) -> bool {
         hwnd_hotkey_on: ptr::null_mut(),
         hwnd_scale: ptr::null_mut(),
         hwnd_multimon: ptr::null_mut(),
+        hwnd_fps: ptr::null_mut(),
         hwnd_sound: ptr::null_mut(),
-        hwnd_timing: ptr::null_mut(),
+        hwnd_sfx_vol: ptr::null_mut(),
+        hwnd_midi_vol: ptr::null_mut(),
         hwnd_theme: ptr::null_mut(),
     });
 
     let hinst = unsafe { GetModuleHandleW(ptr::null()) };
     let cls = wide("AfterDarkSetupDlgClass");
-    let title = wide("After Dark Setup — When & Windows 11 Display");
+    let title = wide("After Dark Setup — When, Display & Audio Mixer");
     let hwnd = unsafe {
         CreateWindowExW(
             WS_EX_DLGMODALFRAME,
             cls.as_ptr(),
             title.as_ptr(),
             WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE,
-            200,
-            140,
-            430,
-            430,
+            190,
+            110,
+            456,
+            516,
             owner,
             ptr::null_mut(),
             hinst,
@@ -154,20 +166,20 @@ pub fn show_setup_dialog(owner: HWND, prefs: &mut AdPrefs) -> bool {
         ch
     };
 
-    let mut y = 16;
+    let mut y = 14;
     make_ctrl("STATIC", "Idle Timeout (minutes):", 0, 0, 16, y + 3, 180, 20, 0);
     state.hwnd_timeout = make_ctrl(
         "EDIT",
         &prefs.timeout_minutes.to_string(),
         WS_BORDER | WS_TABSTOP | ES_NUMBER as u32,
         0,
-        210,
+        214,
         y,
         70,
         22,
         ID_TIMEOUT,
     );
-    y += 32;
+    y += 30;
 
     state.hwnd_corners_on = make_ctrl(
         "BUTTON",
@@ -176,7 +188,7 @@ pub fn show_setup_dialog(owner: HWND, prefs: &mut AdPrefs) -> bool {
         0,
         16,
         y,
-        360,
+        380,
         22,
         ID_CORNERS_ON,
     );
@@ -188,7 +200,7 @@ pub fn show_setup_dialog(owner: HWND, prefs: &mut AdPrefs) -> bool {
             0,
         );
     }
-    y += 28;
+    y += 26;
 
     let corners = ["Top Left", "Top Right", "Bottom Left", "Bottom Right"];
     make_ctrl("STATIC", "Sleep Now Corner:", 0, 0, 32, y + 4, 160, 20, 0);
@@ -197,9 +209,9 @@ pub fn show_setup_dialog(owner: HWND, prefs: &mut AdPrefs) -> bool {
         "",
         CBS_DROPDOWNLIST as u32 | WS_TABSTOP,
         0,
-        210,
+        214,
         y,
-        180,
+        210,
         120,
         ID_SLEEP_CORNER,
     );
@@ -217,7 +229,7 @@ pub fn show_setup_dialog(owner: HWND, prefs: &mut AdPrefs) -> bool {
             0,
         );
     }
-    y += 30;
+    y += 28;
 
     make_ctrl("STATIC", "Never Sleep Corner:", 0, 0, 32, y + 4, 160, 20, 0);
     state.hwnd_wake_corner = make_ctrl(
@@ -225,9 +237,9 @@ pub fn show_setup_dialog(owner: HWND, prefs: &mut AdPrefs) -> bool {
         "",
         CBS_DROPDOWNLIST as u32 | WS_TABSTOP,
         0,
-        210,
+        214,
         y,
-        180,
+        210,
         120,
         ID_WAKE_CORNER,
     );
@@ -245,7 +257,7 @@ pub fn show_setup_dialog(owner: HWND, prefs: &mut AdPrefs) -> bool {
             0,
         );
     }
-    y += 34;
+    y += 30;
 
     state.hwnd_hotkey_on = make_ctrl(
         "BUTTON",
@@ -254,7 +266,7 @@ pub fn show_setup_dialog(owner: HWND, prefs: &mut AdPrefs) -> bool {
         0,
         16,
         y,
-        360,
+        380,
         22,
         ID_HOTKEY_ON,
     );
@@ -266,18 +278,50 @@ pub fn show_setup_dialog(owner: HWND, prefs: &mut AdPrefs) -> bool {
             0,
         );
     }
-    y += 34;
+    y += 30;
 
-    make_ctrl("STATIC", "High-DPI Pixel Scaling:", 0, 0, 16, y + 4, 180, 20, 0);
+    make_ctrl("STATIC", "Frame Rate & Smoothness:", 0, 0, 16, y + 4, 185, 20, 0);
+    state.hwnd_fps = make_ctrl(
+        "COMBOBOX",
+        "",
+        CBS_DROPDOWNLIST as u32 | WS_TABSTOP,
+        0,
+        214,
+        y,
+        210,
+        120,
+        ID_FPS_MODE,
+    );
+    for label in [
+        FrameRateMode::AuthenticRetro.label(),
+        FrameRateMode::Smooth60Fps.label(),
+        FrameRateMode::HighRefresh120Fps.label(),
+    ] {
+        let lw = wide(label);
+        unsafe {
+            SendMessageW(state.hwnd_fps, CB_ADDSTRING, 0, lw.as_ptr() as LPARAM);
+        }
+    }
+    let fps_idx = match prefs.frame_rate_mode {
+        FrameRateMode::AuthenticRetro => 0,
+        FrameRateMode::Smooth60Fps => 1,
+        FrameRateMode::HighRefresh120Fps => 2,
+    };
+    unsafe {
+        SendMessageW(state.hwnd_fps, CB_SETCURSEL, fps_idx, 0);
+    }
+    y += 28;
+
+    make_ctrl("STATIC", "Display Scale & Filter:", 0, 0, 16, y + 4, 185, 20, 0);
     state.hwnd_scale = make_ctrl(
         "COMBOBOX",
         "",
         CBS_DROPDOWNLIST as u32 | WS_TABSTOP,
         0,
-        210,
+        214,
         y,
-        180,
-        120,
+        210,
+        160,
         ID_SCALE_MODE,
     );
     for label in [
@@ -285,6 +329,8 @@ pub fn show_setup_dialog(owner: HWND, prefs: &mut AdPrefs) -> bool {
         ScaleMode::Scale1x.label(),
         ScaleMode::Scale2x.label(),
         ScaleMode::Scale3x.label(),
+        ScaleMode::Classic640x480.label(),
+        ScaleMode::CrtScanlines.label(),
     ] {
         let lw = wide(label);
         unsafe {
@@ -296,28 +342,31 @@ pub fn show_setup_dialog(owner: HWND, prefs: &mut AdPrefs) -> bool {
         ScaleMode::Scale1x => 1,
         ScaleMode::Scale2x => 2,
         ScaleMode::Scale3x => 3,
+        ScaleMode::Classic640x480 => 4,
+        ScaleMode::CrtScanlines => 5,
     };
     unsafe {
         SendMessageW(state.hwnd_scale, CB_SETCURSEL, scale_idx, 0);
     }
-    y += 30;
+    y += 28;
 
-    make_ctrl("STATIC", "Multi-Monitor Mode:", 0, 0, 16, y + 4, 180, 20, 0);
+    make_ctrl("STATIC", "Multi-Monitor Mode:", 0, 0, 16, y + 4, 185, 20, 0);
     state.hwnd_multimon = make_ctrl(
         "COMBOBOX",
         "",
         CBS_DROPDOWNLIST as u32 | WS_TABSTOP,
         0,
-        210,
+        214,
         y,
-        180,
-        120,
+        210,
+        140,
         ID_MULTIMON,
     );
     for label in [
-        "Independent Per Monitor",
-        "Spanned Across All Monitors",
-        "Primary Monitor Only",
+        MultiMonitorMode::PerMonitor.label(),
+        MultiMonitorMode::DifferentPerMonitor.label(),
+        MultiMonitorMode::Spanned.label(),
+        MultiMonitorMode::PrimaryOnly.label(),
     ] {
         let lw = wide(label);
         unsafe {
@@ -326,23 +375,24 @@ pub fn show_setup_dialog(owner: HWND, prefs: &mut AdPrefs) -> bool {
     }
     let mm_idx = match prefs.multi_monitor {
         MultiMonitorMode::PerMonitor => 0,
-        MultiMonitorMode::Spanned => 1,
-        MultiMonitorMode::PrimaryOnly => 2,
+        MultiMonitorMode::DifferentPerMonitor => 1,
+        MultiMonitorMode::Spanned => 2,
+        MultiMonitorMode::PrimaryOnly => 3,
     };
     unsafe {
         SendMessageW(state.hwnd_multimon, CB_SETCURSEL, mm_idx, 0);
     }
-    y += 30;
+    y += 28;
 
-    make_ctrl("STATIC", "Control Panel UI Style:", 0, 0, 16, y + 4, 180, 20, 0);
+    make_ctrl("STATIC", "Control Panel UI Style:", 0, 0, 16, y + 4, 185, 20, 0);
     state.hwnd_theme = make_ctrl(
         "COMBOBOX",
         "",
         CBS_DROPDOWNLIST as u32 | WS_TABSTOP,
         0,
-        210,
+        214,
         y,
-        180,
+        210,
         100,
         ID_THEME_MODE,
     );
@@ -360,16 +410,16 @@ pub fn show_setup_dialog(owner: HWND, prefs: &mut AdPrefs) -> bool {
             0,
         );
     }
-    y += 34;
+    y += 30;
 
     state.hwnd_sound = make_ctrl(
         "BUTTON",
-        "Enable Retro PC-Speaker Sound (Clocks, etc.)",
+        "Enable Audio (Digitized Voices, SFX & MIDI Music)",
         BS_AUTOCHECKBOX as u32 | WS_TABSTOP,
         0,
         16,
         y,
-        360,
+        380,
         22,
         ID_SOUND_ON,
     );
@@ -381,35 +431,53 @@ pub fn show_setup_dialog(owner: HWND, prefs: &mut AdPrefs) -> bool {
             0,
         );
     }
-    y += 26;
+    y += 28;
 
-    state.hwnd_timing = make_ctrl(
-        "BUTTON",
-        "Authentic 1991 Animation Timing Normalization",
-        BS_AUTOCHECKBOX as u32 | WS_TABSTOP,
+    make_ctrl("STATIC", "Voice / SFX Volume (0-100%):", 0, 0, 16, y + 3, 185, 20, 0);
+    state.hwnd_sfx_vol = make_ctrl(
+        "EDIT",
+        &prefs.sfx_volume.to_string(),
+        WS_BORDER | WS_TABSTOP | ES_NUMBER as u32,
         0,
-        16,
+        214,
         y,
-        360,
+        64,
         22,
-        ID_TIMING_ON,
+        ID_SFX_VOL,
     );
-    unsafe {
-        SendMessageW(
-            state.hwnd_timing,
-            BM_SETCHECK,
-            if prefs.authentic_timing { BST_CHECKED } else { BST_UNCHECKED } as WPARAM,
-            0,
-        );
-    }
-    y += 38;
+    make_ctrl(
+        "BUTTON",
+        "Test Audio",
+        BS_PUSHBUTTON as u32 | WS_TABSTOP,
+        0,
+        310,
+        y - 1,
+        114,
+        24,
+        ID_TEST_AUDIO,
+    );
+    y += 28;
+
+    make_ctrl("STATIC", "MIDI Music Volume (0-100%):", 0, 0, 16, y + 3, 185, 20, 0);
+    state.hwnd_midi_vol = make_ctrl(
+        "EDIT",
+        &prefs.midi_volume.to_string(),
+        WS_BORDER | WS_TABSTOP | ES_NUMBER as u32,
+        0,
+        214,
+        y,
+        64,
+        22,
+        ID_MIDI_VOL,
+    );
+    y += 36;
 
     make_ctrl(
         "BUTTON",
         "OK",
         BS_DEFPUSHBUTTON as u32 | WS_TABSTOP,
         0,
-        214,
+        244,
         y,
         84,
         26,
@@ -420,7 +488,7 @@ pub fn show_setup_dialog(owner: HWND, prefs: &mut AdPrefs) -> bool {
         "Cancel",
         BS_PUSHBUTTON as u32 | WS_TABSTOP,
         0,
-        306,
+        340,
         y,
         84,
         26,
@@ -447,6 +515,7 @@ pub fn show_setup_dialog(owner: HWND, prefs: &mut AdPrefs) -> bool {
 
     if state.accepted {
         *prefs = state.prefs;
+        sound.set_volumes(prefs.sfx_volume, prefs.midi_volume);
         true
     } else {
         false
@@ -467,13 +536,28 @@ unsafe extern "system" fn setup_dlg_proc(
     match msg {
         WM_COMMAND => {
             let id = (wparam & 0xFFFF) as i32;
-            if id == ID_OK {
+            let read_num = |h: HWND, def: i32| -> i32 {
                 let mut buf = [0u16; 32];
-                let len = unsafe { GetWindowTextW(st.hwnd_timeout, buf.as_mut_ptr(), 31) } as usize;
-                let s = String::from_utf16_lossy(&buf[..len]);
-                if let Ok(mins) = s.trim().parse::<u32>() {
-                    st.prefs.timeout_minutes = mins.clamp(1, 999);
-                }
+                let len = unsafe { GetWindowTextW(h, buf.as_mut_ptr(), 31) } as usize;
+                String::from_utf16_lossy(&buf[..len])
+                    .trim()
+                    .parse::<i32>()
+                    .unwrap_or(def)
+            };
+            if id == ID_TEST_AUDIO {
+                let sfx = read_num(st.hwnd_sfx_vol, st.prefs.sfx_volume).clamp(0, 100);
+                let midi = read_num(st.hwnd_midi_vol, st.prefs.midi_volume).clamp(0, 100);
+                st.sound.set_volumes(sfx, midi);
+                // Play Bugs Bunny "What's up, Doc?" + brief chime!
+                ad_modules::looney::looney_pack().play_voice(
+                    &st.sound,
+                    true,
+                    ad_modules::looney::BUGS_VOICES[5],
+                );
+                return 0;
+            } else if id == ID_OK {
+                st.prefs.timeout_minutes =
+                    read_num(st.hwnd_timeout, st.prefs.timeout_minutes as i32).clamp(1, 999) as u32;
                 st.prefs.no_corners = unsafe { SendMessageW(st.hwnd_corners_on, BM_GETCHECK, 0, 0) }
                     != BST_CHECKED as isize;
                 st.prefs.sleep_corner = ScreenCorner::from_i32(unsafe {
@@ -485,17 +569,28 @@ unsafe extern "system" fn setup_dlg_proc(
                 st.prefs.hotkey_enabled =
                     unsafe { SendMessageW(st.hwnd_hotkey_on, BM_GETCHECK, 0, 0) }
                         == BST_CHECKED as isize;
+                st.prefs.frame_rate_mode =
+                    match unsafe { SendMessageW(st.hwnd_fps, CB_GETCURSEL, 0, 0) } {
+                        0 => FrameRateMode::AuthenticRetro,
+                        2 => FrameRateMode::HighRefresh120Fps,
+                        _ => FrameRateMode::Smooth60Fps,
+                    };
+                st.prefs.authentic_timing =
+                    st.prefs.frame_rate_mode == FrameRateMode::AuthenticRetro;
                 st.prefs.scale_mode = match unsafe { SendMessageW(st.hwnd_scale, CB_GETCURSEL, 0, 0) }
                 {
                     1 => ScaleMode::Scale1x,
                     2 => ScaleMode::Scale2x,
                     3 => ScaleMode::Scale3x,
+                    4 => ScaleMode::Classic640x480,
+                    5 => ScaleMode::CrtScanlines,
                     _ => ScaleMode::Auto,
                 };
                 st.prefs.multi_monitor =
                     match unsafe { SendMessageW(st.hwnd_multimon, CB_GETCURSEL, 0, 0) } {
-                        1 => MultiMonitorMode::Spanned,
-                        2 => MultiMonitorMode::PrimaryOnly,
+                        1 => MultiMonitorMode::DifferentPerMonitor,
+                        2 => MultiMonitorMode::Spanned,
+                        3 => MultiMonitorMode::PrimaryOnly,
                         _ => MultiMonitorMode::PerMonitor,
                     };
                 st.prefs.ui_theme =
@@ -506,9 +601,9 @@ unsafe extern "system" fn setup_dlg_proc(
                     };
                 st.prefs.sound_enabled = unsafe { SendMessageW(st.hwnd_sound, BM_GETCHECK, 0, 0) }
                     == BST_CHECKED as isize;
-                st.prefs.authentic_timing =
-                    unsafe { SendMessageW(st.hwnd_timing, BM_GETCHECK, 0, 0) }
-                        == BST_CHECKED as isize;
+                st.prefs.sfx_volume = read_num(st.hwnd_sfx_vol, st.prefs.sfx_volume).clamp(0, 100);
+                st.prefs.midi_volume =
+                    read_num(st.hwnd_midi_vol, st.prefs.midi_volume).clamp(0, 100);
                 st.accepted = true;
                 st.done = true;
                 return 0;
@@ -530,9 +625,19 @@ unsafe extern "system" fn setup_dlg_proc(
 // Randomizer "Choose.." Modal Dialog (writes 1991 RANDOM.ADS!)
 // ============================================================================
 
+const ID_RND_ALL: i32 = 301;
+const ID_RND_CLASSIC: i32 = 302;
+const ID_RND_SIMPSONS: i32 = 303;
+const ID_RND_TNG: i32 = 304;
+const ID_RND_LOONEY: i32 = 305;
+const ID_RND_CARTOONS: i32 = 306;
+const ID_RND_FAVS: i32 = 307;
+const ID_RND_CLEAR: i32 = 308;
+
 struct RandomDlgState {
     hwnd_list: HWND,
     ids: Vec<String>,
+    favorites: Vec<String>,
     selected: Vec<String>,
     accepted: bool,
     done: bool,
@@ -542,6 +647,7 @@ pub fn show_randomizer_choose_dialog(
     owner: HWND,
     catalog: &[ModuleCatalogEntry],
     current_pool: &[String],
+    favorites: &[String],
 ) -> Option<Vec<String>> {
     register_modal_class("AfterDarkRandomChooseClass", random_dlg_proc);
 
@@ -554,6 +660,7 @@ pub fn show_randomizer_choose_dialog(
     let mut state = Box::new(RandomDlgState {
         hwnd_list: ptr::null_mut(),
         ids,
+        favorites: favorites.to_vec(),
         selected: Vec::new(),
         accepted: false,
         done: false,
@@ -561,17 +668,17 @@ pub fn show_randomizer_choose_dialog(
 
     let hinst = unsafe { GetModuleHandleW(ptr::null()) };
     let cls = wide("AfterDarkRandomChooseClass");
-    let title = wide("Randomizer — Choose Modules");
+    let title = wide("Randomizer — Choose Modules & Pack Presets");
     let hwnd = unsafe {
         CreateWindowExW(
             WS_EX_DLGMODALFRAME,
             cls.as_ptr(),
             title.as_ptr(),
             WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE,
-            240,
-            180,
-            280,
-            310,
+            210,
+            140,
+            406,
+            410,
             owner,
             ptr::null_mut(),
             hinst,
@@ -610,26 +717,48 @@ pub fn show_randomizer_choose_dialog(
 
     make(
         "STATIC",
-        "Click modules to include in Randomizer:",
+        "Quick Pack Presets (or click individual modules below):",
         0,
         12,
         10,
-        245,
+        365,
         18,
         0,
     );
+
+    // Row 1 of pack presets
+    make("BUTTON", "All (76)", BS_PUSHBUTTON as u32 | WS_TABSTOP, 12, 30, 88, 22, ID_RND_ALL);
+    make("BUTTON", "Classic 1991", BS_PUSHBUTTON as u32 | WS_TABSTOP, 104, 30, 90, 22, ID_RND_CLASSIC);
+    make("BUTTON", "Simpsons", BS_PUSHBUTTON as u32 | WS_TABSTOP, 198, 30, 88, 22, ID_RND_SIMPSONS);
+    make("BUTTON", "Star Trek", BS_PUSHBUTTON as u32 | WS_TABSTOP, 290, 30, 88, 22, ID_RND_TNG);
+
+    // Row 2 of pack presets
+    make("BUTTON", "Looney Tunes", BS_PUSHBUTTON as u32 | WS_TABSTOP, 12, 56, 88, 22, ID_RND_LOONEY);
+    make("BUTTON", "All Cartoons", BS_PUSHBUTTON as u32 | WS_TABSTOP, 104, 56, 90, 22, ID_RND_CARTOONS);
+    make("BUTTON", "★ Favorites", BS_PUSHBUTTON as u32 | WS_TABSTOP, 198, 56, 88, 22, ID_RND_FAVS);
+    make("BUTTON", "Clear All", BS_PUSHBUTTON as u32 | WS_TABSTOP, 290, 56, 88, 22, ID_RND_CLEAR);
+
     state.hwnd_list = make(
         "LISTBOX",
         "",
         WS_BORDER | WS_VSCROLL | WS_TABSTOP | LBS_MULTIPLESEL as u32 | LBS_NOINTEGRALHEIGHT as u32,
         12,
-        32,
-        240,
-        190,
+        86,
+        366,
+        242,
         201,
     );
     for (idx, entry) in candidates.iter().enumerate() {
-        let nw = wide(&entry.meta.name);
+        let pack_tag = if entry.meta.id.starts_with("simpsons_") {
+            "[Simpsons] "
+        } else if entry.meta.id.starts_with("tng_") {
+            "[Star Trek] "
+        } else if entry.meta.id.starts_with("looney_") {
+            "[Looney Tunes] "
+        } else {
+            "[1991] "
+        };
+        let nw = wide(&format!("{}{}", pack_tag, entry.meta.name));
         unsafe {
             SendMessageW(state.hwnd_list, LB_ADDSTRING, 0, nw.as_ptr() as LPARAM);
             let is_sel = current_pool.iter().any(|p| p == &entry.meta.id);
@@ -643,9 +772,9 @@ pub fn show_randomizer_choose_dialog(
         "BUTTON",
         "OK",
         BS_DEFPUSHBUTTON as u32 | WS_TABSTOP,
-        80,
-        234,
-        80,
+        202,
+        338,
+        84,
         26,
         ID_OK,
     );
@@ -653,9 +782,9 @@ pub fn show_randomizer_choose_dialog(
         "BUTTON",
         "Cancel",
         BS_PUSHBUTTON as u32 | WS_TABSTOP,
-        172,
-        234,
-        80,
+        294,
+        338,
+        84,
         26,
         ID_CANCEL,
     );
@@ -699,7 +828,33 @@ unsafe extern "system" fn random_dlg_proc(
     match msg {
         WM_COMMAND => {
             let id = (wparam & 0xFFFF) as i32;
-            if id == ID_OK {
+            if (ID_RND_ALL..=ID_RND_CLEAR).contains(&id) {
+                for (i, mod_id) in st.ids.iter().enumerate() {
+                    let is_simpsons = mod_id.starts_with("simpsons_");
+                    let is_tng = mod_id.starts_with("tng_");
+                    let is_looney = mod_id.starts_with("looney_");
+                    let is_classic = !is_simpsons && !is_tng && !is_looney;
+                    let want = match id {
+                        ID_RND_ALL => true,
+                        ID_RND_CLASSIC => is_classic,
+                        ID_RND_SIMPSONS => is_simpsons,
+                        ID_RND_TNG => is_tng,
+                        ID_RND_LOONEY => is_looney,
+                        ID_RND_CARTOONS => is_simpsons || is_looney,
+                        ID_RND_FAVS => st.favorites.iter().any(|f| f == mod_id),
+                        _ => false,
+                    };
+                    unsafe {
+                        SendMessageW(
+                            st.hwnd_list,
+                            LB_SETSEL,
+                            if want { 1 } else { 0 },
+                            i as LPARAM,
+                        );
+                    }
+                }
+                return 0;
+            } else if id == ID_OK {
                 let count = unsafe { SendMessageW(st.hwnd_list, LB_GETCOUNT, 0, 0) } as usize;
                 st.selected.clear();
                 for i in 0..count.min(st.ids.len()) {
