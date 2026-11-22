@@ -1,0 +1,54 @@
+{
+  "file": "PUZZLE.AD",
+  "module": "PUZZLE",
+  "description": "Graphics Module Library",
+  "imports": [
+    "KERNEL",
+    "GDI",
+    "USER",
+    "SOUND"
+  ],
+  "nametable": {},
+  "controls": {
+    "#1": {
+      "type": 3,
+      "title": "Size:",
+      "count": 3,
+      "default_value": 0,
+      "choices": [
+        "Small",
+        "Medium",
+        "Large"
+      ]
+    },
+    "#2": {
+      "type": 3,
+      "title": "Speed:",
+      "count": 3,
+      "default_value": 0,
+      "choices": [
+        "Slow",
+        "Medium",
+        "Fast"
+      ]
+    },
+    "#3": {
+      "type": 5,
+      "title": "Sound",
+      "count": 0,
+      "default_value": 0
+    },
+    "#4": {
+      "type": 5,
+      "title": "Invert Screen",
+      "count": 0,
+      "default_value": 0
+    }
+  },
+  "strings": {
+    "#10": "Puzzle by Bill Stewart.\r\n  \u00a91990 Berkeley Systems Inc.",
+    "#20": "Puzzle",
+    "#30": "PUZZLE (tm)\r\n\r\nOriginal concept by John Rotenstein.\r\n\r\nProgramming Puzzle was interesting, but John came up with the really novel and original idea.\r\n\r\nIf you like Puzzle, please send John a picture postcard of your home town:\r\n\r\nJohn Rotenstein\r\nPO Box 165\r\nDouble Bay, NSW 2028\r\nAustralia"
+  },
+  "bitmaps": []
+}

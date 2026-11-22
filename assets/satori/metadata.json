@@ -1,0 +1,87 @@
+{
+  "file": "SATORI.AD",
+  "module": "SATORI",
+  "description": "Graphics Module Library",
+  "imports": [
+    "KERNEL",
+    "GDI",
+    "USER"
+  ],
+  "nametable": {},
+  "controls": {
+    "#1": {
+      "type": 3,
+      "title": "Display:",
+      "count": 7,
+      "default_value": 6,
+      "choices": [
+        "Fields",
+        "Pools",
+        "Rays",
+        "Waves",
+        "Leaves",
+        "Mix",
+        "Random"
+      ]
+    },
+    "#2": {
+      "type": 3,
+      "title": "Colors:",
+      "count": 14,
+      "default_value": 13,
+      "choices": [
+        "Arizona",
+        "Siberia",
+        "Tijuana",
+        "Pacific",
+        "Hawaii",
+        "Nile",
+        "Louisiana",
+        "Camelot",
+        "Colorado",
+        "Atlantis",
+        "Outback",
+        "Ithaca",
+        "Oz",
+        "Random"
+      ]
+    },
+    "#3": {
+      "type": 1,
+      "title": "End Clarity:",
+      "count": 5,
+      "default_value": 0,
+      "labels": [
+        "1X1",
+        "2X2",
+        "4X4",
+        "8X8",
+        "16X16"
+      ],
+      "thresholds": [
+        20,
+        40,
+        60,
+        80,
+        100
+      ]
+    },
+    "#4": {
+      "type": 2,
+      "title": "Knots:",
+      "count": 0,
+      "default_value": 31,
+      "unit": "",
+      "min": 1,
+      "max": 20,
+      "extra1": 1,
+      "extra2": 0
+    }
+  },
+  "strings": {
+    "#10": "Satori by Tracy Diane Elmore.\r\n  \u00a91991 Berkeley Systems Inc.",
+    "#20": "Satori",
+    "#30": "SATORI (tm)  uses a technique called \"color animation\" which changes the colors of an image without having to redraw the image.  This happens only if your system has 256 colors.  If your system does not have 256 colors then a single frame of the Satori light show is built.\r\n\r\nIf your machine is in 256 colors:\r\nPressing CAPS LOCK key will change your palette, so that you can flip through different palettes without waking After Dark.\r\n\r\nTry the \"Mix\" display option -- it is well worth the wait.\r\n\r\nOriginal design and concept by Ben Haller.\r\n\r\n\r\n\r\n"
+  },
+  "bitmaps": []
+}

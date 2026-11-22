@@ -1,0 +1,84 @@
+{
+  "file": "LASER.AD",
+  "module": "LASER",
+  "description": "Graphics Module Library",
+  "imports": [
+    "KERNEL",
+    "GDI",
+    "USER"
+  ],
+  "nametable": {},
+  "controls": {
+    "#1": {
+      "type": 3,
+      "title": "Rays:",
+      "count": 8,
+      "default_value": 2,
+      "choices": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8"
+      ]
+    },
+    "#2": {
+      "type": 1,
+      "title": "Width:",
+      "count": 11,
+      "default_value": 40,
+      "labels": [
+        "Thin",
+        "5",
+        "10",
+        "20",
+        "30",
+        "40",
+        "50",
+        "60",
+        "75",
+        "100",
+        "Infinite"
+      ],
+      "thresholds": [
+        7,
+        15,
+        25,
+        35,
+        45,
+        55,
+        65,
+        75,
+        85,
+        95,
+        100
+      ]
+    },
+    "#3": {
+      "type": 2,
+      "title": "Color Speed:",
+      "count": 0,
+      "default_value": 92,
+      "unit": "%",
+      "min": 1,
+      "max": 100,
+      "extra1": 100,
+      "extra2": 2
+    },
+    "#4": {
+      "type": 5,
+      "title": "Clear Screen First",
+      "count": 4,
+      "default_value": 0
+    }
+  },
+  "strings": {
+    "#10": "Lasers by Bill Stewart.\r\n  \u00a91990 Berkeley Systems Inc.",
+    "#20": "Lasers",
+    "#30": "LASERS (tm)\r\n\r\nMulit-colored lasers that clear your screen and can create interesting patterns.  \r\n\r\nThe number of lasers can be varied from 1-8.\r\n\r\nThe width of the laser traces can be varied from 1 to 100, as well as Infinite.\r\n\r\nConcept by Bill Stewart and Ian MacDonald.\r\n\r\n"
+  },
+  "bitmaps": []
+}

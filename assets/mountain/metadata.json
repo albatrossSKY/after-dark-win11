@@ -1,0 +1,74 @@
+{
+  "file": "MOUNTAIN.AD",
+  "module": "MOUNTAIN",
+  "description": "Mountains AfterDark Module modified by TDE 29 Jan, 1991",
+  "imports": [
+    "win87em",
+    "KERNEL",
+    "GDI",
+    "USER"
+  ],
+  "nametable": {},
+  "controls": {
+    "#1": {
+      "type": 3,
+      "title": "View:",
+      "count": 6,
+      "default_value": 5,
+      "choices": [
+        "Boundaries",
+        "Webs",
+        "Mountains",
+        "Constructions",
+        "Highlands",
+        "Random"
+      ]
+    },
+    "#2": {
+      "type": 3,
+      "title": "Planet:",
+      "count": 10,
+      "default_value": 9,
+      "choices": [
+        "Mercury",
+        "Venus",
+        "Earth",
+        "Mars",
+        "Jupiter",
+        "Saturn",
+        "Uranus",
+        "Neptune",
+        "Pluto",
+        "Random"
+      ]
+    },
+    "#3": {
+      "type": 2,
+      "title": "Complexity:",
+      "count": 0,
+      "default_value": 69,
+      "unit": "",
+      "min": 3,
+      "max": 6,
+      "extra1": 1,
+      "extra2": 0
+    },
+    "#4": {
+      "type": 2,
+      "title": "Zoom:",
+      "count": 6,
+      "default_value": 70,
+      "unit": "",
+      "min": 0,
+      "max": 100,
+      "extra1": 100,
+      "extra2": 0
+    }
+  },
+  "strings": {
+    "#10": "Mountains by Tracy Elmore.\r\n  \u00a91990 Berkeley Systems Inc.",
+    "#20": "Mountains",
+    "#30": "MOUNTAINS(tm) uses fractal mathematics to provide many and varied landscapes for your viewing pleasure.\r\n\r\n\"View\" changes the look of the mountains so that in some cases they don't even look like mountains at all.\r\n\r\n\"Planet\" provides different planet landscapes.\r\n\r\n\"Complexity\" allows you to choose how many iterations the mountains will take to draw.  The higher the complexity the longer it takes to draw.\r\n\r\nBring the landscape closer with the \"Zoom\" slider.\r\n\r\nOriginal design and concept by Ben Haller and Mouse Herrell."
+  },
+  "bitmaps": []
+}

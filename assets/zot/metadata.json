@@ -1,0 +1,65 @@
+{
+  "file": "ZOT.AD",
+  "module": "ZOT",
+  "description": "Graphics Module Library",
+  "imports": [
+    "KERNEL",
+    "GDI",
+    "USER"
+  ],
+  "nametable": {},
+  "controls": {
+    "#1": {
+      "type": 1,
+      "title": "Forkiness:",
+      "count": 3,
+      "default_value": 50,
+      "labels": [
+        "Few",
+        "Forky",
+        "Max Forky!"
+      ],
+      "thresholds": [
+        33,
+        67,
+        100
+      ]
+    },
+    "#2": {
+      "type": 0,
+      "title": "Kinkiness",
+      "count": 3,
+      "default_value": 0
+    },
+    "#3": {
+      "type": 1,
+      "title": "How Often:",
+      "count": 4,
+      "default_value": 62,
+      "labels": [
+        "Rarely",
+        "Sometimes",
+        "Often",
+        "Stormy!"
+      ],
+      "thresholds": [
+        25,
+        50,
+        75,
+        100
+      ]
+    },
+    "#4": {
+      "type": 0,
+      "title": "",
+      "count": 0,
+      "default_value": 0
+    }
+  },
+  "strings": {
+    "#10": "Zot! by Bill Stewart & Jim Stewart.\r\n  \u00a91990 Berkeley Systems Inc.",
+    "#20": "Zot!",
+    "#30": "ZOT! (tm)\r\n\r\nRealistic lightning designed by Jim Stewart.\r\n\r\nDuring the period when this module was being developed, the skies were filled with thunder and lightning each night.  These flashes of reality greatly contributed to the realism of this effect.  \r\n\r\n "
+  },
+  "bitmaps": []
+}

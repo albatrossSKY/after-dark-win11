@@ -1,0 +1,52 @@
+{
+  "file": "FADE.AD",
+  "module": "FADE",
+  "description": "Graphics Module Library",
+  "imports": [
+    "KERNEL",
+    "GDI",
+    "USER"
+  ],
+  "nametable": {},
+  "controls": {
+    "#1": {
+      "type": 3,
+      "title": "Style:",
+      "count": 7,
+      "default_value": 4,
+      "choices": [
+        "Plain",
+        "Squares",
+        "Slow Zoom",
+        "Blinds",
+        "Radar",
+        "Mesh",
+        "Dissolve"
+      ]
+    },
+    "#2": {
+      "type": 0,
+      "title": "Styles:",
+      "count": 6,
+      "default_value": 0
+    },
+    "#3": {
+      "type": 0,
+      "title": "",
+      "count": 0,
+      "default_value": 0
+    },
+    "#4": {
+      "type": 0,
+      "title": "",
+      "count": 0,
+      "default_value": 0
+    }
+  },
+  "strings": {
+    "#10": "Fade Away by Bill Stewart & Ian MacDonald.\r\n  \u00a91990 Berkeley Systems Inc.",
+    "#20": "Fade Away",
+    "#30": "FADE AWAY (tm) makes your screen completely black in a number of interesting ways.\r\n\r\nSelect a method to fade away from the \"Style\" drop-down list box. "
+  },
+  "bitmaps": []
+}

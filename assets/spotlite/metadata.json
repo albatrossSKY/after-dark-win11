@@ -1,0 +1,53 @@
+{
+  "file": "SPOTLITE.AD",
+  "module": "SPOTLITE",
+  "description": "Graphics Module Library",
+  "imports": [
+    "KERNEL",
+    "GDI",
+    "USER"
+  ],
+  "nametable": {},
+  "controls": {
+    "#1": {
+      "type": 2,
+      "title": "Size:",
+      "count": 0,
+      "default_value": 59,
+      "unit": "",
+      "min": 10,
+      "max": 140,
+      "extra1": 100,
+      "extra2": 0
+    },
+    "#2": {
+      "type": 2,
+      "title": "Speed:",
+      "count": 0,
+      "default_value": 33,
+      "unit": "",
+      "min": 1,
+      "max": 7,
+      "extra1": 100,
+      "extra2": 0
+    },
+    "#3": {
+      "type": 0,
+      "title": "",
+      "count": 0,
+      "default_value": 0
+    },
+    "#4": {
+      "type": 0,
+      "title": "",
+      "count": 0,
+      "default_value": 0
+    }
+  },
+  "strings": {
+    "#10": "Spotlight by Bill Stewart.\r\n  \u00a91990 Berkeley Systems Inc.",
+    "#20": "Spotlight",
+    "#30": "SPOTLIGHT (tm) shines a moving spotlight on your Windows desktop.\r\n\r\nOriginal concept by Bob Schumaker and Chip Morningstar. \r\n\r\nUse the \"Size\" slider to change the size of the spotlight.\r\n\r\nThe \"Speed\" slider controls how fast it moves around the screen.\r\n\r\n\r\n\r\n\r\n"
+  },
+  "bitmaps": []
+}

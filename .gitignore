@@ -1,0 +1,20 @@
+# Rust build output & staged release artifacts
+/target/
+*.pdb
+
+# Original 1991 floppy image & proprietary Win16 binaries
+/raw/
+
+# Packaging / release archives
+/*.zip
+/dist/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+desktop.ini
+*.log

@@ -1,0 +1,54 @@
+{
+  "file": "GRAV.AD",
+  "module": "GRAV",
+  "description": "Gravity Jan 4, 1990 modified to make faster TDE",
+  "imports": [
+    "KERNEL",
+    "GDI",
+    "USER",
+    "SOUND"
+  ],
+  "nametable": {},
+  "controls": {
+    "#1": {
+      "type": 2,
+      "title": "Number Balls:",
+      "count": 0,
+      "default_value": 41,
+      "unit": "",
+      "min": 1,
+      "max": 7,
+      "extra1": 1,
+      "extra2": 0
+    },
+    "#2": {
+      "type": 2,
+      "title": "Size:",
+      "count": 0,
+      "default_value": 74,
+      "unit": "",
+      "min": 10,
+      "max": 30,
+      "extra1": 100,
+      "extra2": 0
+    },
+    "#3": {
+      "type": 5,
+      "title": "Clear Screen",
+      "count": 0,
+      "default_value": 1
+    },
+    "#4": {
+      "type": 5,
+      "title": "Sound",
+      "count": 0,
+      "default_value": 0
+    }
+  },
+  "strings": {
+    "#10": "Gravity by Bill Stewart & Tracy Elmore.\r\n  \u00a91990 Berkeley Systems Inc.",
+    "#20": "Gravity",
+    "#30": "GRAVITY (tm) demonstrates Newtonian gravity with bouncing balls.\r\n\r\nOriginal idea by Bryce Fowler.\r\n\r\nChoose 1-7 balls with the \"Number Balls\" slider.\r\n\r\nUse the \"Size\" slider to set the size of the balls.\r\n\r\nCheck \"Clear Screen\" to clear the screen between each set of balls.\r\n\r\nCheck \"Sound\" to hear the balls bounce."
+  },
+  "bitmaps": []
+}

@@ -1,0 +1,58 @@
+{
+  "file": "SPHERES.AD",
+  "module": "SPHERES",
+  "description": "Graphics Module Library",
+  "imports": [
+    "KERNEL",
+    "GDI",
+    "USER"
+  ],
+  "nametable": {},
+  "controls": {
+    "#1": {
+      "type": 2,
+      "title": "Max Size:",
+      "count": 0,
+      "default_value": 73,
+      "unit": "%",
+      "min": 10,
+      "max": 100,
+      "extra1": 100,
+      "extra2": 2
+    },
+    "#2": {
+      "type": 2,
+      "title": "Offset:",
+      "count": 0,
+      "default_value": 27,
+      "unit": "",
+      "min": 0,
+      "max": 10,
+      "extra1": 100,
+      "extra2": 0
+    },
+    "#3": {
+      "type": 2,
+      "title": "Clear Every:",
+      "count": 0,
+      "default_value": 30,
+      "unit": "",
+      "min": 1,
+      "max": 200,
+      "extra1": 100,
+      "extra2": 0
+    },
+    "#4": {
+      "type": 5,
+      "title": "Clear Screen First",
+      "count": 0,
+      "default_value": 0
+    }
+  },
+  "strings": {
+    "#10": "Spheres by Bill Stewart & Mouse Herrell. \r\n  \u00a91990 Berkeley Systems Inc.",
+    "#20": "Spheres",
+    "#30": "SPHERES (tm) makes 3D-looking colorful orbs that fill your screen.\r\n\r\n\"Max Size\" is the maiximum size of a sphere.\r\n\r\n\"Offset\" controls the shape of the sphere.  The larger the offset, the more egg-shaped the sphere will be.\r\n\r\n\"Clear Every\" sets the number of spheres drawn before clearing the screen.\r\n\r\nBased on Spheres by Bruce Burkhalter."
+  },
+  "bitmaps": []
+}

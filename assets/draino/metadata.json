@@ -1,0 +1,64 @@
+{
+  "file": "DRAINO.AD",
+  "module": "DRAINO",
+  "description": "Graphics Module Library",
+  "imports": [
+    "win87em",
+    "KERNEL",
+    "GDI",
+    "USER"
+  ],
+  "nametable": {},
+  "controls": {
+    "#1": {
+      "type": 1,
+      "title": "Speed:",
+      "count": 3,
+      "default_value": 100,
+      "labels": [
+        "Slow",
+        "Medium",
+        "Fast"
+      ],
+      "thresholds": [
+        33,
+        67,
+        100
+      ]
+    },
+    "#2": {
+      "type": 1,
+      "title": "Direction:",
+      "count": 3,
+      "default_value": 100,
+      "labels": [
+        "Clockwise",
+        "Inward",
+        "Counter"
+      ],
+      "thresholds": [
+        33,
+        67,
+        100
+      ]
+    },
+    "#3": {
+      "type": 5,
+      "title": "Drops",
+      "count": 2,
+      "default_value": 1
+    },
+    "#4": {
+      "type": 5,
+      "title": "Show Drain",
+      "count": 2,
+      "default_value": 1
+    }
+  },
+  "strings": {
+    "#10": "Down the Drain by Bill Stewart & Jim Stewart.\r\n  \u00a91990 Berkeley Systems Inc.",
+    "#20": "Down the Drain",
+    "#30": "DOWN THE DRAIN (tm)\r\n\r\nOriginal concept by Rob Vaterlaus.\r\n\r\nThe \"Direction\" slider sets the coriolis force for Southern Hemisphere (Clockwise), Northern Hemisphere (Counter [Counterclockwise]), or on the equator (Inward).  The \"Drops\" check box will add drops for draining after most of the screen is black.  The \"Drain\" check box starts you draining with a drain in the middle of the screen.\r\n\r\n"
+  },
+  "bitmaps": []
+}

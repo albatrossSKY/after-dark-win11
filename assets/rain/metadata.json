@@ -1,0 +1,53 @@
+{
+  "file": "RAIN.AD",
+  "module": "RAIN",
+  "description": "Graphics Module Library",
+  "imports": [
+    "KERNEL",
+    "GDI",
+    "USER"
+  ],
+  "nametable": {},
+  "controls": {
+    "#1": {
+      "type": 2,
+      "title": "# of Drops:",
+      "count": 0,
+      "default_value": 22,
+      "unit": "",
+      "min": 1,
+      "max": 9,
+      "extra1": 100,
+      "extra2": 0
+    },
+    "#2": {
+      "type": 2,
+      "title": "Drop Size:",
+      "count": 0,
+      "default_value": 43,
+      "unit": "",
+      "min": 5,
+      "max": 35,
+      "extra1": 100,
+      "extra2": 0
+    },
+    "#3": {
+      "type": 0,
+      "title": "",
+      "count": 0,
+      "default_value": 0
+    },
+    "#4": {
+      "type": 5,
+      "title": "Clear Screen First",
+      "count": 0,
+      "default_value": 0
+    }
+  },
+  "strings": {
+    "#10": "Hard Rain by Bill Stewart & Tracy Elmore.\r\n  \u00a91990 Berkeley Systems Inc.",
+    "#20": "Hard Rain",
+    "#30": "HARD RAIN (tm)\r\n\r\nBased on original design by James J. Eastman.\r\nSee Scientific American, Dec 1987.\r\n\r\n"
+  },
+  "bitmaps": []
+}

@@ -1,0 +1,58 @@
+{
+  "file": "STAINED.AD",
+  "module": "BLANKER",
+  "description": "Graphics Module Library",
+  "imports": [
+    "KERNEL",
+    "GDI",
+    "USER"
+  ],
+  "nametable": {},
+  "controls": {
+    "#1": {
+      "type": 2,
+      "title": "Complexity:",
+      "count": 0,
+      "default_value": 10,
+      "unit": "%",
+      "min": 0,
+      "max": 100,
+      "extra1": 1,
+      "extra2": 2
+    },
+    "#2": {
+      "type": 2,
+      "title": "Duplication:",
+      "count": 0,
+      "default_value": 100,
+      "unit": "%",
+      "min": 0,
+      "max": 100,
+      "extra1": 1,
+      "extra2": 2
+    },
+    "#3": {
+      "type": 2,
+      "title": "Color:",
+      "count": 0,
+      "default_value": 100,
+      "unit": "%",
+      "min": 0,
+      "max": 100,
+      "extra1": 1,
+      "extra2": 2
+    },
+    "#4": {
+      "type": 0,
+      "title": "",
+      "count": 0,
+      "default_value": 0
+    }
+  },
+  "strings": {
+    "#10": "Stained Glass by Jean Tantra and Wes Boyd.\r\n  \u00a91990 Berkeley Systems Inc.",
+    "#20": "Stained Glass",
+    "#30": "STAINED GLASS(tm) produces an infinite variety of beautiful quiltlike patterns.\r\n\r\nThe \"Complexity\" slider increases the appearance of detail in the image.\r\n\r\nThe \"Duplication\" slider controls how often the central image is duplicated in the periphery.\r\n\r\nThe \"Color\" slider controls how colorful the image gets.  On the low end only a few colors are used.\r\n\r\nDedicated to Anna Benson.\r\nWith contributions from: Ellen Lewis, \r\nKristieanne Jones, Eleanor Allen, Julia Kay, and David Oster."
+  },
+  "bitmaps": []
+}

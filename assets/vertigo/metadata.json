@@ -1,0 +1,83 @@
+{
+  "file": "VERTIGO.AD",
+  "module": "VERTIGO",
+  "description": "Vertigo, last modified February 4 1991, by TDE",
+  "imports": [
+    "win87em",
+    "KERNEL",
+    "GDI",
+    "USER"
+  ],
+  "nametable": {},
+  "controls": {
+    "#1": {
+      "type": 3,
+      "title": "Palette:",
+      "count": 3,
+      "default_value": 2,
+      "choices": [
+        "Smooth",
+        "Random",
+        "Stingray"
+      ]
+    },
+    "#2": {
+      "type": 2,
+      "title": "Spiral Pitch:",
+      "count": 0,
+      "default_value": 100,
+      "unit": "%",
+      "min": 1,
+      "max": 100,
+      "extra1": 100,
+      "extra2": 2
+    },
+    "#3": {
+      "type": 2,
+      "title": "Color Speed:",
+      "count": 0,
+      "default_value": 100,
+      "unit": "%",
+      "min": 0,
+      "max": 100,
+      "extra1": 100,
+      "extra2": 2
+    },
+    "#4": {
+      "type": 1,
+      "title": "Delay:",
+      "count": 10,
+      "default_value": 35,
+      "labels": [
+        "0 secs",
+        "1 second",
+        "2 secs",
+        "5 secs",
+        "10 secs",
+        "20 secs",
+        "30 secs",
+        "40 secs",
+        "50 secs",
+        "1 minute"
+      ],
+      "thresholds": [
+        10,
+        20,
+        30,
+        40,
+        50,
+        60,
+        70,
+        80,
+        90,
+        100
+      ]
+    }
+  },
+  "strings": {
+    "#10": "Vertigo by Tracy Elmore.\r\n  \u00a91990 Berkeley Systems Inc.",
+    "#20": "Vertigo",
+    "#30": "VERTIGO (tm)\r\n\r\n\"Spiral Pitch\" sets the tightness with which the spirals are drawn.\r\n\r\n\"Palette\" sets the colors that are used to draw the shapes.\r\n\r\n\"Delay\" determines how long the color animation continues before a new figure is drawn for those with 256 color machines.\r\n\r\nStingray Palette by Bill Stewart.\r\nThanks to Jim Stewart for the shapes.\r\n\r\nOriginal concept by Jack Eastman."
+  },
+  "bitmaps": []
+}

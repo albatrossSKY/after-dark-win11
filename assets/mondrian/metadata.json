@@ -1,0 +1,55 @@
+{
+  "file": "MONDRIAN.AD",
+  "module": "MONDRIAN",
+  "description": "Graphics Module Library",
+  "imports": [
+    "KERNEL",
+    "GDI",
+    "USER"
+  ],
+  "nametable": {},
+  "controls": {
+    "#1": {
+      "type": 1,
+      "title": "Speed",
+      "count": 4,
+      "default_value": 37,
+      "labels": [
+        "Slow",
+        "Medium",
+        "Fast",
+        "Very Fast!"
+      ],
+      "thresholds": [
+        25,
+        50,
+        75,
+        100
+      ]
+    },
+    "#2": {
+      "type": 5,
+      "title": "Clear Screen First",
+      "count": 0,
+      "default_value": 0
+    },
+    "#3": {
+      "type": 0,
+      "title": "",
+      "count": 0,
+      "default_value": 0
+    },
+    "#4": {
+      "type": 0,
+      "title": "",
+      "count": 0,
+      "default_value": 0
+    }
+  },
+  "strings": {
+    "#10": "Mondrian by Bill Stewart & Wes Boyd.\r\n  \u00a91990 Berkeley Systems Inc.",
+    "#20": "Mondrian",
+    "#30": "MONDRIAN (tm) inverts random parts of your screen, providing screen-saving while still showing the Windows desktop.\r\n\r\nThe \"Speed\" slider controls how fast the inversions appear.\r\n\r\nChecking \"Clear Screen First\" will black out the monitor before the inversions appear."
+  },
+  "bitmaps": []
+}

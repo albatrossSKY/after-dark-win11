@@ -1,0 +1,65 @@
+{
+  "file": "3DBOUNCE.AD",
+  "module": "BLANKER",
+  "description": "GeoBounce December 28, 1990 by Mouse, recompiled by Tracy w/no debug info",
+  "imports": [
+    "KERNEL",
+    "GDI",
+    "USER"
+  ],
+  "nametable": {},
+  "controls": {
+    "#1": {
+      "type": 3,
+      "title": "Shape",
+      "count": 5,
+      "default_value": 0,
+      "choices": [
+        "Tetrahedron",
+        "Cube",
+        "Octahedron",
+        "Dodecahedron",
+        "Icosahedron"
+      ]
+    },
+    "#2": {
+      "type": 2,
+      "title": "Size:",
+      "count": 0,
+      "default_value": 54,
+      "unit": "%",
+      "min": 10,
+      "max": 100,
+      "extra1": 1,
+      "extra2": 2
+    },
+    "#3": {
+      "type": 2,
+      "title": "Speed:",
+      "count": 0,
+      "default_value": 28,
+      "unit": "%",
+      "min": 0,
+      "max": 100,
+      "extra1": 1,
+      "extra2": 2
+    },
+    "#4": {
+      "type": 3,
+      "title": "Faces",
+      "count": 3,
+      "default_value": 2,
+      "choices": [
+        "Shading",
+        "Colors",
+        "Both"
+      ]
+    }
+  },
+  "strings": {
+    "#10": "GeoBounce by Ed Hall and Mouse Herrell.\r\n  \u00a91990 Berkeley Systems Inc.",
+    "#20": "GeoBounce",
+    "#30": "GEOBOUNCE(tm) distorts the space-time continuum, permitting glimpses through the fourth dimension to the other side of the universe, which is populated by an intelligent and happy community of Platonic solids."
+  },
+  "bitmaps": []
+}

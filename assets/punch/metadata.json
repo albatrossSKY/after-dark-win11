@@ -1,0 +1,61 @@
+{
+  "file": "PUNCH.AD",
+  "module": "PUNCH",
+  "description": "Graphics Module Library",
+  "imports": [
+    "KERNEL",
+    "GDI",
+    "USER",
+    "SOUND"
+  ],
+  "nametable": {},
+  "controls": {
+    "#1": {
+      "type": 3,
+      "title": "Shape:",
+      "count": 5,
+      "default_value": 0,
+      "choices": [
+        "Circle",
+        "Oval",
+        "Square",
+        "Rectangle",
+        "Random"
+      ]
+    },
+    "#2": {
+      "type": 2,
+      "title": "Size:",
+      "count": 0,
+      "default_value": 50,
+      "unit": "",
+      "min": 10,
+      "max": 120,
+      "extra1": 100,
+      "extra2": 0
+    },
+    "#3": {
+      "type": 2,
+      "title": "Speed:",
+      "count": 0,
+      "default_value": 100,
+      "unit": "",
+      "min": 1,
+      "max": 9,
+      "extra1": 100,
+      "extra2": 0
+    },
+    "#4": {
+      "type": 5,
+      "title": "Sound",
+      "count": 0,
+      "default_value": 0
+    }
+  },
+  "strings": {
+    "#10": "Punch Out by Bill Stewart.\r\n  \u00a91990 Berkeley Systems Inc..",
+    "#20": "Punch Out",
+    "#30": "PUNCH OUT (tm) punches holes in your monitor and slides the pieces off the screen in random directions.\r\n\r\nOriginal concept by Bob Schumaker & Chip Morningstar.\r\n\r\nCool punch out ideas by Jos\u00e9 Carlos Col\u00f3n and Mouse Herrell.\r\n\r\nUse the \"Shape\" drop down list box to select different shapes to be punched.\r\n\r\nUse the \"Size\" slider to vary the size of pieces and the \"Speed\" slider to vary the speed the punched pieces move.\r\n\r\nUse the \"Sound\" check box to enable the sound of each piece being punched out.\r\n\r\n"
+  },
+  "bitmaps": []
+}

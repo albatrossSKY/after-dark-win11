@@ -1,0 +1,65 @@
+{
+  "file": "GLOBE.AD",
+  "module": "LOGO",
+  "description": "Graphics Module Library",
+  "imports": [
+    "win87em",
+    "KERNEL",
+    "GDI",
+    "USER"
+  ],
+  "nametable": {
+    "5:#1": "FILE"
+  },
+  "controls": {
+    "#1": {
+      "type": 2,
+      "title": "Rotation:",
+      "count": 3,
+      "default_value": 53,
+      "unit": " deg",
+      "min": 65491,
+      "max": 45,
+      "extra1": 1,
+      "extra2": 2
+    },
+    "#2": {
+      "type": 1,
+      "title": "Speed:",
+      "count": 5,
+      "default_value": 0,
+      "labels": [
+        "Slowest",
+        "Slow",
+        "Medium",
+        "Fast",
+        "Fastest"
+      ],
+      "thresholds": [
+        20,
+        40,
+        60,
+        80,
+        100
+      ]
+    },
+    "#3": {
+      "type": 4,
+      "title": "Map...",
+      "count": 0,
+      "default_value": 0
+    },
+    "#4": {
+      "type": 0,
+      "title": "Mirror:",
+      "count": 4,
+      "default_value": 0
+    }
+  },
+  "strings": {
+    "#10": "Globe by Jack Eastman & Wes Boyd.\r\n  \u00a91990 Berkeley Systems Inc.",
+    "#20": "Globe",
+    "#30": "GLOBE (tm) takes a bitmap, wraps it around a sphere, and displays the rotating image.\r\n\r\nThe bitmap must be bigger than 60 by 60 and less than 300 vertical by 500 horizontal.\r\n\r\n\r\n"
+  },
+  "bitmaps": []
+}

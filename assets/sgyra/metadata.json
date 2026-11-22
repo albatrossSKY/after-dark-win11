@@ -1,0 +1,58 @@
+{
+  "file": "SGYRA.AD",
+  "module": "BLANKER",
+  "description": "Graphics Module Library",
+  "imports": [
+    "KERNEL",
+    "GDI",
+    "USER"
+  ],
+  "nametable": {},
+  "controls": {
+    "#1": {
+      "type": 2,
+      "title": "Max Lines:",
+      "count": 0,
+      "default_value": 54,
+      "unit": "",
+      "min": 20,
+      "max": 360,
+      "extra1": 10,
+      "extra2": 0
+    },
+    "#2": {
+      "type": 2,
+      "title": "Min Lines:",
+      "count": 0,
+      "default_value": 28,
+      "unit": "%",
+      "min": 0,
+      "max": 100,
+      "extra1": 1,
+      "extra2": 2
+    },
+    "#3": {
+      "type": 2,
+      "title": "Color Cycling:",
+      "count": 0,
+      "default_value": 32,
+      "unit": "%",
+      "min": 0,
+      "max": 100,
+      "extra1": 1,
+      "extra2": 2
+    },
+    "#4": {
+      "type": 0,
+      "title": "",
+      "count": 0,
+      "default_value": 0
+    }
+  },
+  "strings": {
+    "#10": "Spiral Gyra by Keith Alphonso & John Casey.\r\n  \u00a91990 Berkeley Systems Inc.",
+    "#20": "Spiral Gyra",
+    "#30": "SPIRAL GYRA(tm) is another line drawing module with an interesting twist or two."
+  },
+  "bitmaps": []
+}

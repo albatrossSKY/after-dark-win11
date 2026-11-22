@@ -1,0 +1,77 @@
+{
+  "file": "ROSE.AD",
+  "module": "ROSE",
+  "description": "Graphics Module Library",
+  "imports": [
+    "win87em",
+    "KERNEL",
+    "GDI",
+    "USER"
+  ],
+  "nametable": {
+    "10:#1": "SZT",
+    "10:#2": "SINT"
+  },
+  "controls": {
+    "#1": {
+      "type": 1,
+      "title": "Speed:",
+      "count": 6,
+      "default_value": 100,
+      "labels": [
+        "Lethargic",
+        "Slow",
+        "Moving",
+        "Fast",
+        "Swift",
+        "Quick"
+      ],
+      "thresholds": [
+        10,
+        20,
+        40,
+        60,
+        80,
+        90
+      ]
+    },
+    "#2": {
+      "type": 1,
+      "title": "Trail Length:",
+      "count": 5,
+      "default_value": 61,
+      "labels": [
+        "Shortest",
+        "Short",
+        "Medium",
+        "Long",
+        "Longest"
+      ],
+      "thresholds": [
+        16,
+        32,
+        48,
+        64,
+        80
+      ]
+    },
+    "#3": {
+      "type": 5,
+      "title": "Big Dots",
+      "count": 0,
+      "default_value": 0
+    },
+    "#4": {
+      "type": 0,
+      "title": "",
+      "count": 0,
+      "default_value": 0
+    }
+  },
+  "strings": {
+    "#10": "Rose by Bruce Burkhalter & Tracy Elmore.\r\n  \u00a91990 Berkeley Systems Inc.",
+    "#20": "Rose",
+    "#30": "ROSE (tm)\r\n\r\nOriginal design and concept by Ben Haller.\r\n\r\nRose was first conceived, in a rudimentary way, on an IBM PC in BASIC many years ago, soon after the IBM had first hit the market.  \r\n\r\nSome years later Ben remembered the algorithm and re-created the code (which had long since been lost).  Then he forgot about it again until After Dark came out and, once again, remembered it.\r\n\r\nIt's based on trigonometry, that most hated and most beautiful of mathematical subjects."
+  },
+  "bitmaps": []
+}

@@ -1,0 +1,43 @@
+{
+  "file": "SHAPES.AD",
+  "module": "shapes",
+  "description": "Graphics Module Library",
+  "imports": [
+    "KERNEL",
+    "GDI",
+    "USER"
+  ],
+  "nametable": {},
+  "controls": {
+    "#1": {
+      "type": 5,
+      "title": "Clear Screen First",
+      "count": 0,
+      "default_value": 0
+    },
+    "#2": {
+      "type": 5,
+      "title": "Color",
+      "count": 0,
+      "default_value": 1
+    },
+    "#3": {
+      "type": 0,
+      "title": "",
+      "count": 0,
+      "default_value": 0
+    },
+    "#4": {
+      "type": 0,
+      "title": "",
+      "count": 0,
+      "default_value": 0
+    }
+  },
+  "strings": {
+    "#10": "Shapes by Bill Stewart.\r\n  \u00a91990 Berkeley Systems Inc.",
+    "#20": "Shapes",
+    "#30": "SHAPES (tm) fills the screen with a rapid succession of geometric shapes.\r\n\r\nOriginal design and concept by Jack Eastman.\r\n\r\nIf \"Clear Screen First\" is checked, the screen is blanked before the shapes start appearing.\r\n\r\nUse the \"Color\" check box to select color or black & white shapes."
+  },
+  "bitmaps": []
+}

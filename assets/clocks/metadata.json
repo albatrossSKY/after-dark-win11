@@ -1,0 +1,177 @@
+{
+  "file": "CLOCKS.AD",
+  "module": "clocks",
+  "description": "Graphics Module Library",
+  "imports": [
+    "KERNEL",
+    "GDI",
+    "USER",
+    "SOUND"
+  ],
+  "nametable": {
+    "2:#1": "MODERN",
+    "2:#2": "ANTIQUE",
+    "2:#3": "BWMODERN",
+    "2:#4": "BWANTIQU",
+    "2:#5": "ZERO",
+    "2:#6": "ONE",
+    "2:#7": "TWO",
+    "2:#8": "THREE",
+    "2:#9": "FOUR",
+    "2:#10": "FIVE",
+    "2:#11": "SIX",
+    "2:#12": "SEVEN",
+    "2:#13": "EIGHT",
+    "2:#14": "NINE"
+  },
+  "controls": {
+    "#1": {
+      "type": 3,
+      "title": "Type:",
+      "count": 3,
+      "default_value": 2,
+      "choices": [
+        "Modern",
+        "Antique",
+        "Digital"
+      ]
+    },
+    "#2": {
+      "type": 1,
+      "title": "Float Speed:",
+      "count": 5,
+      "default_value": 50,
+      "labels": [
+        "Slowest",
+        "Slow",
+        "Medium",
+        "Fast",
+        "Fastest"
+      ],
+      "thresholds": [
+        20,
+        40,
+        60,
+        80,
+        100
+      ]
+    },
+    "#3": {
+      "type": 5,
+      "title": "Show Seconds",
+      "count": 0,
+      "default_value": 1
+    },
+    "#4": {
+      "type": 5,
+      "title": "Sound",
+      "count": 0,
+      "default_value": 0
+    }
+  },
+  "strings": {
+    "#10": "Clocks by Bill Stewart & Jim Stewart.\r\n  \u00a91990 Berkeley Systems Inc.",
+    "#20": "Clocks",
+    "#30": "CLOCKS (tm)\r\n\r\nBased on Clock by Rob Vaterlaus.\r\n\r\nYou can choose from 3 different styles of clocks with the \"Type\" drop-down list box.\r\n\r\nThe \"Float Speed\" slider controls the speed that the clock moves around the screen.\r\n\r\nCheck \"Show Seconds\" to display the seconds.  \r\n\r\nTo hear the clock ticking, check the \"Sound\" check box."
+  },
+  "bitmaps": [
+    {
+      "id": "#1",
+      "name": "MODERN",
+      "width": 128,
+      "height": 128,
+      "bpp": 4
+    },
+    {
+      "id": "#2",
+      "name": "ANTIQUE",
+      "width": 128,
+      "height": 129,
+      "bpp": 4
+    },
+    {
+      "id": "#3",
+      "name": "BWMODERN",
+      "width": 128,
+      "height": 128,
+      "bpp": 1
+    },
+    {
+      "id": "#4",
+      "name": "BWANTIQU",
+      "width": 128,
+      "height": 128,
+      "bpp": 1
+    },
+    {
+      "id": "#5",
+      "name": "ZERO",
+      "width": 45,
+      "height": 70,
+      "bpp": 1
+    },
+    {
+      "id": "#6",
+      "name": "ONE",
+      "width": 24,
+      "height": 70,
+      "bpp": 1
+    },
+    {
+      "id": "#7",
+      "name": "TWO",
+      "width": 45,
+      "height": 70,
+      "bpp": 1
+    },
+    {
+      "id": "#8",
+      "name": "THREE",
+      "width": 45,
+      "height": 70,
+      "bpp": 1
+    },
+    {
+      "id": "#9",
+      "name": "FOUR",
+      "width": 47,
+      "height": 70,
+      "bpp": 1
+    },
+    {
+      "id": "#10",
+      "name": "FIVE",
+      "width": 46,
+      "height": 70,
+      "bpp": 1
+    },
+    {
+      "id": "#11",
+      "name": "SIX",
+      "width": 45,
+      "height": 70,
+      "bpp": 1
+    },
+    {
+      "id": "#12",
+      "name": "SEVEN",
+      "width": 46,
+      "height": 70,
+      "bpp": 1
+    },
+    {
+      "id": "#13",
+      "name": "EIGHT",
+      "width": 45,
+      "height": 70,
+      "bpp": 1
+    },
+    {
+      "id": "#14",
+      "name": "NINE",
+      "width": 45,
+      "height": 70,
+      "bpp": 1
+    }
+  ]
+}

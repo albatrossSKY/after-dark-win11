@@ -1,0 +1,663 @@
+{
+  "file": "AQUA.AD",
+  "module": "AQUA",
+  "description": "Graphics Module Library",
+  "imports": [
+    "KERNEL",
+    "GDI",
+    "USER"
+  ],
+  "nametable": {
+    "2:#1": "KELP1",
+    "2:#2": "KELP2",
+    "2:#3": "MKELP1",
+    "2:#4": "MKELP2",
+    "2:#5": "BWKELP1",
+    "2:#6": "BWKELP2",
+    "2:#7": "FISH11",
+    "2:#8": "FISH21",
+    "2:#9": "MFISH11",
+    "2:#10": "MFISH21",
+    "2:#11": "BWFISH11",
+    "2:#12": "BWFISH21",
+    "2:#13": "SEAHORS",
+    "2:#14": "SEAHORS2",
+    "2:#15": "MSEAHOR2",
+    "2:#16": "MSEAHORS",
+    "2:#17": "BWHORSE1",
+    "2:#18": "BWHORSE2",
+    "2:#19": "COLOR1",
+    "2:#20": "COLOR2",
+    "2:#21": "MCOLOR1",
+    "2:#22": "MCOLOR2",
+    "2:#23": "BWCOLOR1",
+    "2:#24": "BWCOLOR2",
+    "2:#25": "FISHR1",
+    "2:#26": "FISHR2",
+    "2:#27": "MFISHR1",
+    "2:#28": "MFISHR2",
+    "2:#29": "BWRED1",
+    "2:#30": "BWRED2",
+    "2:#31": "BUBBL1",
+    "2:#32": "BUBBL2",
+    "2:#33": "MBUBBL1",
+    "2:#34": "MBUBBL2",
+    "2:#35": "MULTI1",
+    "2:#36": "MULTI2",
+    "2:#37": "MMULTI1",
+    "2:#38": "MMULTI2",
+    "2:#39": "BWMULTI1",
+    "2:#40": "BWMULTI2",
+    "2:#41": "SCHOOL1",
+    "2:#42": "SCHOOL2",
+    "2:#43": "MSCHOOL1",
+    "2:#44": "MSCHOOL2",
+    "2:#45": "BWSCHL1",
+    "2:#46": "BWSCHL2",
+    "2:#47": "BLUE1",
+    "2:#48": "BLUE2",
+    "2:#49": "MBLUE1",
+    "2:#50": "MBLUE2",
+    "2:#51": "BWBLUE1",
+    "2:#52": "BWBLUE2",
+    "2:#53": "CRAB1",
+    "2:#54": "CRAB2",
+    "2:#55": "MCRAB1",
+    "2:#56": "MCRAB2",
+    "2:#57": "BWCRAB1",
+    "2:#58": "BWCRAB2",
+    "2:#59": "JELLY1",
+    "2:#60": "JELLY2",
+    "2:#61": "MJELLY1",
+    "2:#62": "MJELLY2",
+    "2:#63": "YFISH1",
+    "2:#64": "YFISH2",
+    "2:#65": "MYFISH1",
+    "2:#66": "MYFISH2",
+    "2:#67": "BWYELL1",
+    "2:#68": "BWYELL2",
+    "2:#69": "GLOBE1",
+    "2:#70": "GLOBE2",
+    "2:#71": "MGLOBE1",
+    "2:#72": "MGLOBE2",
+    "2:#73": "BWGLOBE1",
+    "2:#74": "BWGLOBE2",
+    "2:#75": "SEAFLOOR",
+    "2:#76": "BWFLOOR"
+  },
+  "controls": {
+    "#1": {
+      "type": 2,
+      "title": "Creatures:",
+      "count": 0,
+      "default_value": 25,
+      "unit": "",
+      "min": 1,
+      "max": 20,
+      "extra1": 100,
+      "extra2": 0
+    },
+    "#2": {
+      "type": 2,
+      "title": "Seaweed:",
+      "count": 0,
+      "default_value": 50,
+      "unit": "",
+      "min": 0,
+      "max": 4,
+      "extra1": 0,
+      "extra2": 0
+    },
+    "#3": {
+      "type": 5,
+      "title": "Show Sea Floor",
+      "count": 0,
+      "default_value": 1
+    },
+    "#4": {
+      "type": 0,
+      "title": "Sound",
+      "count": 0,
+      "default_value": 0
+    }
+  },
+  "strings": {
+    "#10": "Aquatic Realm by Bill Stewart.\r\n  \u00a91990 Berkeley Systems Inc.",
+    "#20": "Aquatic Realm",
+    "#30": "AQUATIC REALM (tm) turns your monitor into a lively undersea environment featuring many colorful marine creatures.\r\n\r\nOriginal concept from Fish! by Tom & Ed's Bogus Software.\r\n\r\nChecking \"Show Sea Floor\" makes this module much more interesting, but a little less of a screen saver.\r\n\r\nRealistic fish artwork by Tomoya Ikeda."
+  },
+  "bitmaps": [
+    {
+      "id": "#1",
+      "name": "KELP1",
+      "width": 64,
+      "height": 64,
+      "bpp": 4
+    },
+    {
+      "id": "#2",
+      "name": "KELP2",
+      "width": 64,
+      "height": 64,
+      "bpp": 4
+    },
+    {
+      "id": "#3",
+      "name": "MKELP1",
+      "width": 64,
+      "height": 64,
+      "bpp": 1
+    },
+    {
+      "id": "#4",
+      "name": "MKELP2",
+      "width": 64,
+      "height": 64,
+      "bpp": 1
+    },
+    {
+      "id": "#5",
+      "name": "BWKELP1",
+      "width": 64,
+      "height": 64,
+      "bpp": 1
+    },
+    {
+      "id": "#6",
+      "name": "BWKELP2",
+      "width": 64,
+      "height": 64,
+      "bpp": 1
+    },
+    {
+      "id": "#7",
+      "name": "FISH11",
+      "width": 64,
+      "height": 64,
+      "bpp": 4
+    },
+    {
+      "id": "#8",
+      "name": "FISH21",
+      "width": 64,
+      "height": 64,
+      "bpp": 4
+    },
+    {
+      "id": "#9",
+      "name": "MFISH11",
+      "width": 64,
+      "height": 64,
+      "bpp": 1
+    },
+    {
+      "id": "#10",
+      "name": "MFISH21",
+      "width": 64,
+      "height": 64,
+      "bpp": 1
+    },
+    {
+      "id": "#11",
+      "name": "BWFISH11",
+      "width": 64,
+      "height": 64,
+      "bpp": 1
+    },
+    {
+      "id": "#12",
+      "name": "BWFISH21",
+      "width": 64,
+      "height": 64,
+      "bpp": 1
+    },
+    {
+      "id": "#13",
+      "name": "SEAHORS",
+      "width": 64,
+      "height": 64,
+      "bpp": 4
+    },
+    {
+      "id": "#14",
+      "name": "SEAHORS2",
+      "width": 64,
+      "height": 64,
+      "bpp": 4
+    },
+    {
+      "id": "#15",
+      "name": "MSEAHOR2",
+      "width": 64,
+      "height": 64,
+      "bpp": 1
+    },
+    {
+      "id": "#16",
+      "name": "MSEAHORS",
+      "width": 64,
+      "height": 64,
+      "bpp": 1
+    },
+    {
+      "id": "#17",
+      "name": "BWHORSE1",
+      "width": 64,
+      "height": 64,
+      "bpp": 1
+    },
+    {
+      "id": "#18",
+      "name": "BWHORSE2",
+      "width": 64,
+      "height": 64,
+      "bpp": 1
+    },
+    {
+      "id": "#19",
+      "name": "COLOR1",
+      "width": 64,
+      "height": 64,
+      "bpp": 4
+    },
+    {
+      "id": "#20",
+      "name": "COLOR2",
+      "width": 64,
+      "height": 64,
+      "bpp": 4
+    },
+    {
+      "id": "#21",
+      "name": "MCOLOR1",
+      "width": 64,
+      "height": 64,
+      "bpp": 1
+    },
+    {
+      "id": "#22",
+      "name": "MCOLOR2",
+      "width": 64,
+      "height": 64,
+      "bpp": 1
+    },
+    {
+      "id": "#23",
+      "name": "BWCOLOR1",
+      "width": 64,
+      "height": 64,
+      "bpp": 1
+    },
+    {
+      "id": "#24",
+      "name": "BWCOLOR2",
+      "width": 64,
+      "height": 64,
+      "bpp": 1
+    },
+    {
+      "id": "#25",
+      "name": "FISHR1",
+      "width": 64,
+      "height": 64,
+      "bpp": 4
+    },
+    {
+      "id": "#26",
+      "name": "FISHR2",
+      "width": 64,
+      "height": 64,
+      "bpp": 4
+    },
+    {
+      "id": "#27",
+      "name": "MFISHR1",
+      "width": 64,
+      "height": 64,
+      "bpp": 1
+    },
+    {
+      "id": "#28",
+      "name": "MFISHR2",
+      "width": 64,
+      "height": 64,
+      "bpp": 1
+    },
+    {
+      "id": "#29",
+      "name": "BWRED1",
+      "width": 64,
+      "height": 64,
+      "bpp": 1
+    },
+    {
+      "id": "#30",
+      "name": "BWRED2",
+      "width": 64,
+      "height": 64,
+      "bpp": 1
+    },
+    {
+      "id": "#31",
+      "name": "BUBBL1",
+      "width": 30,
+      "height": 30,
+      "bpp": 4
+    },
+    {
+      "id": "#32",
+      "name": "BUBBL2",
+      "width": 30,
+      "height": 30,
+      "bpp": 4
+    },
+    {
+      "id": "#33",
+      "name": "MBUBBL1",
+      "width": 30,
+      "height": 30,
+      "bpp": 1
+    },
+    {
+      "id": "#34",
+      "name": "MBUBBL2",
+      "width": 30,
+      "height": 30,
+      "bpp": 1
+    },
+    {
+      "id": "#35",
+      "name": "MULTI1",
+      "width": 64,
+      "height": 64,
+      "bpp": 4
+    },
+    {
+      "id": "#36",
+      "name": "MULTI2",
+      "width": 64,
+      "height": 64,
+      "bpp": 4
+    },
+    {
+      "id": "#37",
+      "name": "MMULTI1",
+      "width": 64,
+      "height": 64,
+      "bpp": 1
+    },
+    {
+      "id": "#38",
+      "name": "MMULTI2",
+      "width": 64,
+      "height": 64,
+      "bpp": 1
+    },
+    {
+      "id": "#39",
+      "name": "BWMULTI1",
+      "width": 64,
+      "height": 64,
+      "bpp": 1
+    },
+    {
+      "id": "#40",
+      "name": "BWMULTI2",
+      "width": 64,
+      "height": 64,
+      "bpp": 1
+    },
+    {
+      "id": "#41",
+      "name": "SCHOOL1",
+      "width": 64,
+      "height": 64,
+      "bpp": 4
+    },
+    {
+      "id": "#42",
+      "name": "SCHOOL2",
+      "width": 64,
+      "height": 64,
+      "bpp": 4
+    },
+    {
+      "id": "#43",
+      "name": "MSCHOOL1",
+      "width": 64,
+      "height": 64,
+      "bpp": 1
+    },
+    {
+      "id": "#44",
+      "name": "MSCHOOL2",
+      "width": 64,
+      "height": 64,
+      "bpp": 1
+    },
+    {
+      "id": "#45",
+      "name": "BWSCHL1",
+      "width": 64,
+      "height": 64,
+      "bpp": 1
+    },
+    {
+      "id": "#46",
+      "name": "BWSCHL2",
+      "width": 64,
+      "height": 64,
+      "bpp": 1
+    },
+    {
+      "id": "#47",
+      "name": "BLUE1",
+      "width": 64,
+      "height": 64,
+      "bpp": 4
+    },
+    {
+      "id": "#48",
+      "name": "BLUE2",
+      "width": 64,
+      "height": 64,
+      "bpp": 4
+    },
+    {
+      "id": "#49",
+      "name": "MBLUE1",
+      "width": 64,
+      "height": 64,
+      "bpp": 1
+    },
+    {
+      "id": "#50",
+      "name": "MBLUE2",
+      "width": 64,
+      "height": 64,
+      "bpp": 1
+    },
+    {
+      "id": "#51",
+      "name": "BWBLUE1",
+      "width": 64,
+      "height": 64,
+      "bpp": 1
+    },
+    {
+      "id": "#52",
+      "name": "BWBLUE2",
+      "width": 64,
+      "height": 64,
+      "bpp": 1
+    },
+    {
+      "id": "#53",
+      "name": "CRAB1",
+      "width": 64,
+      "height": 64,
+      "bpp": 4
+    },
+    {
+      "id": "#54",
+      "name": "CRAB2",
+      "width": 64,
+      "height": 64,
+      "bpp": 4
+    },
+    {
+      "id": "#55",
+      "name": "MCRAB1",
+      "width": 64,
+      "height": 64,
+      "bpp": 1
+    },
+    {
+      "id": "#56",
+      "name": "MCRAB2",
+      "width": 64,
+      "height": 64,
+      "bpp": 1
+    },
+    {
+      "id": "#57",
+      "name": "BWCRAB1",
+      "width": 64,
+      "height": 64,
+      "bpp": 1
+    },
+    {
+      "id": "#58",
+      "name": "BWCRAB2",
+      "width": 64,
+      "height": 64,
+      "bpp": 1
+    },
+    {
+      "id": "#59",
+      "name": "JELLY1",
+      "width": 64,
+      "height": 64,
+      "bpp": 4
+    },
+    {
+      "id": "#60",
+      "name": "JELLY2",
+      "width": 64,
+      "height": 64,
+      "bpp": 4
+    },
+    {
+      "id": "#61",
+      "name": "MJELLY1",
+      "width": 64,
+      "height": 64,
+      "bpp": 1
+    },
+    {
+      "id": "#62",
+      "name": "MJELLY2",
+      "width": 64,
+      "height": 64,
+      "bpp": 1
+    },
+    {
+      "id": "#63",
+      "name": "YFISH1",
+      "width": 64,
+      "height": 64,
+      "bpp": 4
+    },
+    {
+      "id": "#64",
+      "name": "YFISH2",
+      "width": 64,
+      "height": 64,
+      "bpp": 4
+    },
+    {
+      "id": "#65",
+      "name": "MYFISH1",
+      "width": 64,
+      "height": 64,
+      "bpp": 1
+    },
+    {
+      "id": "#66",
+      "name": "MYFISH2",
+      "width": 64,
+      "height": 64,
+      "bpp": 1
+    },
+    {
+      "id": "#67",
+      "name": "BWYELL1",
+      "width": 64,
+      "height": 64,
+      "bpp": 1
+    },
+    {
+      "id": "#68",
+      "name": "BWYELL2",
+      "width": 64,
+      "height": 64,
+      "bpp": 1
+    },
+    {
+      "id": "#69",
+      "name": "GLOBE1",
+      "width": 64,
+      "height": 64,
+      "bpp": 4
+    },
+    {
+      "id": "#70",
+      "name": "GLOBE2",
+      "width": 64,
+      "height": 64,
+      "bpp": 4
+    },
+    {
+      "id": "#71",
+      "name": "MGLOBE1",
+      "width": 64,
+      "height": 64,
+      "bpp": 1
+    },
+    {
+      "id": "#72",
+      "name": "MGLOBE2",
+      "width": 64,
+      "height": 64,
+      "bpp": 1
+    },
+    {
+      "id": "#73",
+      "name": "BWGLOBE1",
+      "width": 64,
+      "height": 64,
+      "bpp": 1
+    },
+    {
+      "id": "#74",
+      "name": "BWGLOBE2",
+      "width": 64,
+      "height": 64,
+      "bpp": 1
+    },
+    {
+      "id": "#75",
+      "name": "SEAFLOOR",
+      "width": 192,
+      "height": 64,
+      "bpp": 4
+    },
+    {
+      "id": "#76",
+      "name": "BWFLOOR",
+      "width": 191,
+      "height": 65,
+      "bpp": 1
+    }
+  ]
+}

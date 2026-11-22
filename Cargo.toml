@@ -1,0 +1,14 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/ad-sdk",
+    "crates/ad-modules",
+    "crates/ad-blanker-sdk-example",
+    "crates/ad-host",
+]
+
+[workspace.package]
+version = "1.0.0"
+edition = "2024"
+license = "MIT"
+description = "After Dark 1.0a (1991) 1:1 decompiled & modernized for Windows 11 in native Rust"

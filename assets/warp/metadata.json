@@ -1,0 +1,73 @@
+{
+  "file": "WARP.AD",
+  "module": "WARP",
+  "description": "Graphics Module Library",
+  "imports": [
+    "KERNEL",
+    "GDI",
+    "USER"
+  ],
+  "nametable": {},
+  "controls": {
+    "#1": {
+      "type": 1,
+      "title": "Speed:",
+      "count": 8,
+      "default_value": 0,
+      "labels": [
+        "Fast In",
+        "Medium In",
+        "Slow In",
+        "Impulse In",
+        "Impulse Out",
+        "Slow Out",
+        "Medium Out",
+        "Fast Out"
+      ],
+      "thresholds": [
+        12,
+        25,
+        38,
+        45,
+        55,
+        75,
+        88,
+        100
+      ]
+    },
+    "#2": {
+      "type": 2,
+      "title": "Stars:",
+      "count": 3,
+      "default_value": 71,
+      "unit": "",
+      "min": 1,
+      "max": 200,
+      "extra1": 1,
+      "extra2": 0
+    },
+    "#3": {
+      "type": 3,
+      "title": "Size:",
+      "count": 3,
+      "default_value": 0,
+      "choices": [
+        "Small",
+        "Big",
+        "Both"
+      ]
+    },
+    "#4": {
+      "type": 5,
+      "title": "Color",
+      "count": 0,
+      "default_value": 0
+    }
+  },
+  "strings": {
+    "#10": "Warp! by Bruce Burkhalter & Tracy Elmore.\r\n  \u00a91990 Berkeley Systems Inc.",
+    "#20": "Warp!",
+    "#30": "WARP! (tm)\r\n\r\n\"Speed\" controls the speed and direction of travel through the stars.\r\n\r\n\"Size\" controls the size of the stars.\r\n\r\n\"Number of Stars\" controls the number of stars displayed.\r\n\r\n\"Color\" allows color stars for those with color monitors.\r\n\r\n\r\nRotational stellar effects and black hole designed by Bill Stewart and Jack Eastman.\r\n"
+  },
+  "bitmaps": []
+}

@@ -1,0 +1,87 @@
+{
+  "file": "RAINSTOR.AD",
+  "module": "RAINSTOR",
+  "description": "Rain Storm, January 22, 1990 changed by TDE \"Wind\"",
+  "imports": [
+    "KERNEL",
+    "GDI",
+    "USER"
+  ],
+  "nametable": {},
+  "controls": {
+    "#1": {
+      "type": 1,
+      "title": "Strength:",
+      "count": 5,
+      "default_value": 62,
+      "labels": [
+        "Drizzle",
+        "Wet",
+        "Rain",
+        "Downpour",
+        "Stormy"
+      ],
+      "thresholds": [
+        20,
+        30,
+        40,
+        60,
+        90
+      ]
+    },
+    "#2": {
+      "type": 2,
+      "title": "Lightning:",
+      "count": 0,
+      "default_value": 10,
+      "unit": "%",
+      "min": 0,
+      "max": 100,
+      "extra1": 1,
+      "extra2": 2
+    },
+    "#3": {
+      "type": 2,
+      "title": "Drops:",
+      "count": 0,
+      "default_value": 45,
+      "unit": "",
+      "min": 5,
+      "max": 100,
+      "extra1": 5,
+      "extra2": 0
+    },
+    "#4": {
+      "type": 1,
+      "title": "Wind:",
+      "count": 8,
+      "default_value": 44,
+      "labels": [
+        "Puff",
+        "Draft",
+        "Breeze",
+        "Zephyr",
+        "Gust",
+        "Wind",
+        "Blow",
+        "Hurricane"
+      ],
+      "thresholds": [
+        10,
+        20,
+        30,
+        40,
+        50,
+        60,
+        70,
+        80
+      ]
+    }
+  },
+  "strings": {
+    "#10": "Rainstorm by Tracy Elmore.\r\n  \u00a91990 Berkeley Systems Inc.",
+    "#20": "Rain Storm",
+    "#30": "RAINSTORM(tm)\r\n\r\n\"Lightning\" sets the delay between lightning flashes.\r\n\r\n\"Strength\" changes the effect of the storm from drizzle to downpour.\r\n\r\n\"Drops\" will also change the effect.  A drizzle will have the effect of mere mist if there are only 10 drops.\r\n\r\n\"Wind\" will change the strength of the wind blowing the storm. \r\n\r\nOriginal design and concept by Patrick Beard."
+  },
+  "bitmaps": []
+}

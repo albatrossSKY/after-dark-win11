@@ -1,0 +1,59 @@
+{
+  "file": "LOGO.AD",
+  "module": "LOGO",
+  "description": "Logo",
+  "imports": [
+    "KERNEL",
+    "GDI",
+    "USER"
+  ],
+  "nametable": {
+    "5:#1": "FILE"
+  },
+  "controls": {
+    "#1": {
+      "type": 1,
+      "title": "Speed:",
+      "count": 5,
+      "default_value": 47,
+      "labels": [
+        "Slowest",
+        "Slow",
+        "Medium",
+        "Fast",
+        "Fastest"
+      ],
+      "thresholds": [
+        20,
+        40,
+        60,
+        80,
+        100
+      ]
+    },
+    "#2": {
+      "type": 0,
+      "title": "Fade Speed",
+      "count": 4,
+      "default_value": 0
+    },
+    "#3": {
+      "type": 4,
+      "title": "Picture..",
+      "count": 0,
+      "default_value": 0
+    },
+    "#4": {
+      "type": 0,
+      "title": "Mirror:",
+      "count": 4,
+      "default_value": 0
+    }
+  },
+  "strings": {
+    "#10": "Logo by Bill Stewart.\r\n  \u00a91990 Berkeley Systems Inc.",
+    "#20": "Logo",
+    "#30": "LOGO (tm) displays and animates any selected bitmap (.BMP) file.  \r\n\r\nSince any Windows bitmap file can be used, you can easily make your company logo or trademark a custom screen saver with Logo.\r\n \r\n"
+  },
+  "bitmaps": []
+}

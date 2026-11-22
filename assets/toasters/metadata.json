@@ -1,0 +1,156 @@
+{
+  "file": "TOASTERS.AD",
+  "module": "TOASTERS",
+  "description": "Graphics Module Library",
+  "imports": [
+    "KERNEL",
+    "GDI",
+    "USER"
+  ],
+  "nametable": {
+    "2:#1": "WING_DN",
+    "2:#2": "WING_MID",
+    "2:#3": "WING_MD",
+    "2:#4": "WING_UP",
+    "2:#5": "LT_TOAST",
+    "2:#6": "MD_TOAST",
+    "2:#7": "DK_TOAST",
+    "2:#8": "BWING_DN",
+    "2:#9": "BWINGMID",
+    "2:#10": "BWING_MD",
+    "2:#11": "BWING_UP",
+    "2:#12": "BWMTOAST"
+  },
+  "controls": {
+    "#1": {
+      "type": 2,
+      "title": "Flying Objects",
+      "count": 0,
+      "default_value": 77,
+      "unit": "",
+      "min": 1,
+      "max": 12,
+      "extra1": 100,
+      "extra2": 0
+    },
+    "#2": {
+      "type": 1,
+      "title": "Toast:",
+      "count": 3,
+      "default_value": 0,
+      "labels": [
+        "Light",
+        "Medium",
+        "Dark"
+      ],
+      "thresholds": [
+        33,
+        67,
+        100
+      ]
+    },
+    "#3": {
+      "type": 0,
+      "title": "Color",
+      "count": 0,
+      "default_value": 0
+    },
+    "#4": {
+      "type": 0,
+      "title": "",
+      "count": 0,
+      "default_value": 0
+    }
+  },
+  "strings": {
+    "#10": "Flying Toasters by Bill Stewart.\r\n  \u00a91990 Berkeley Systems Inc.",
+    "#20": "Flying Toasters",
+    "#30": " FLYING TOASTERS (tm)\r\n\r\n \"I really just walked into the kitchen and said to myself, 'Flying Toasters!' and went back to the office and coded it.\"  -  Jack Eastman\r\n\r\nOriginal concept by Jack Eastman.\r\nToaster artwork by Tomoya Ikeda.\r\n\r\n "
+  },
+  "bitmaps": [
+    {
+      "id": "#1",
+      "name": "WING_DN",
+      "width": 64,
+      "height": 64,
+      "bpp": 4
+    },
+    {
+      "id": "#2",
+      "name": "WING_MID",
+      "width": 64,
+      "height": 64,
+      "bpp": 4
+    },
+    {
+      "id": "#3",
+      "name": "WING_MD",
+      "width": 64,
+      "height": 64,
+      "bpp": 4
+    },
+    {
+      "id": "#4",
+      "name": "WING_UP",
+      "width": 64,
+      "height": 64,
+      "bpp": 4
+    },
+    {
+      "id": "#5",
+      "name": "LT_TOAST",
+      "width": 64,
+      "height": 64,
+      "bpp": 4
+    },
+    {
+      "id": "#6",
+      "name": "MD_TOAST",
+      "width": 64,
+      "height": 64,
+      "bpp": 4
+    },
+    {
+      "id": "#7",
+      "name": "DK_TOAST",
+      "width": 64,
+      "height": 64,
+      "bpp": 4
+    },
+    {
+      "id": "#8",
+      "name": "BWING_DN",
+      "width": 64,
+      "height": 64,
+      "bpp": 1
+    },
+    {
+      "id": "#9",
+      "name": "BWINGMID",
+      "width": 64,
+      "height": 64,
+      "bpp": 1
+    },
+    {
+      "id": "#10",
+      "name": "BWING_MD",
+      "width": 64,
+      "height": 64,
+      "bpp": 1
+    },
+    {
+      "id": "#11",
+      "name": "BWING_UP",
+      "width": 64,
+      "height": 64,
+      "bpp": 1
+    },
+    {
+      "id": "#12",
+      "name": "BWMTOAST",
+      "width": 64,
+      "height": 64,
+      "bpp": 1
+    }
+  ]
+}

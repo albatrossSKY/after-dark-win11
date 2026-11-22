@@ -1,0 +1,66 @@
+{
+  "file": "WORMS.AD",
+  "module": "WORMS",
+  "description": "After Dark Module Worms Jan 5, 1991 TDE sound TDE",
+  "imports": [
+    "KERNEL",
+    "GDI",
+    "USER",
+    "SOUND"
+  ],
+  "nametable": {},
+  "controls": {
+    "#1": {
+      "type": 1,
+      "title": "Wiggle:",
+      "count": 4,
+      "default_value": 71,
+      "labels": [
+        "Straight",
+        "Weavy",
+        "Crawly",
+        "Wiggly"
+      ],
+      "thresholds": [
+        25,
+        50,
+        75,
+        100
+      ]
+    },
+    "#2": {
+      "type": 2,
+      "title": "Segments:",
+      "count": 8,
+      "default_value": 70,
+      "unit": "",
+      "min": 2,
+      "max": 20,
+      "extra1": 1,
+      "extra2": 0
+    },
+    "#3": {
+      "type": 2,
+      "title": "Worms:",
+      "count": 0,
+      "default_value": 70,
+      "unit": "",
+      "min": 1,
+      "max": 20,
+      "extra1": 1,
+      "extra2": 0
+    },
+    "#4": {
+      "type": 5,
+      "title": "Sound",
+      "count": 0,
+      "default_value": 0
+    }
+  },
+  "strings": {
+    "#10": "Can of Worms by Tracy Elmore.\r\n  \u00a91990 Berkeley Systems Inc.",
+    "#20": "Can of Worms",
+    "#30": "CAN OF WORMS (tm)\r\n\r\nThese creepy crawlers can be set to eat away the screen that you have been working in.  \r\n\r\nSet the number of worms and the number of segments.  This module contains screen munching sound.\r\n\r\nOriginal design and concept by Jack Eastman."
+  },
+  "bitmaps": []
+}

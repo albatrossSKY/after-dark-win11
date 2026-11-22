@@ -1,0 +1,66 @@
+{
+  "file": "MESSAGE.AD",
+  "module": "MESSAGE",
+  "description": "Messages December 30, 1990 modified by TDE",
+  "imports": [
+    "KERNEL",
+    "GDI",
+    "USER"
+  ],
+  "nametable": {
+    "5:#1": "MESSAGE"
+  },
+  "controls": {
+    "#1": {
+      "type": 3,
+      "title": "Move:",
+      "count": 3,
+      "default_value": 1,
+      "choices": [
+        "Popping",
+        "Floating",
+        "Sliding"
+      ]
+    },
+    "#2": {
+      "type": 1,
+      "title": "Speed:",
+      "count": 6,
+      "default_value": 56,
+      "labels": [
+        "Sluggish",
+        "Slow",
+        "Medium",
+        "Moving",
+        "Quick",
+        "Flying"
+      ],
+      "thresholds": [
+        15,
+        30,
+        45,
+        60,
+        75,
+        90
+      ]
+    },
+    "#3": {
+      "type": 4,
+      "title": "Edit...",
+      "count": 0,
+      "default_value": 0
+    },
+    "#4": {
+      "type": 0,
+      "title": "",
+      "count": 0,
+      "default_value": 0
+    }
+  },
+  "strings": {
+    "#10": "Messages by Tracy Elmore.\r\n  \u00a91990 Berkeley Systems Inc.",
+    "#20": "Messages",
+    "#30": "MESSAGES(tm) allows you to create and display any one of eight different screen saving messages.  To edit the message press the \"Edit..\" button and type in any message you choose.  You can format, change the color, font, size and style of the message.  To put in a hard carriage return, you need to press CTRL-ENTER.\r\n\r\n\"Popping\" causes the message to pop up randomly on the screen.\r\n\r\n\"Floating\" causes the message to float about the screen.\r\n\r\n\"Scrolling\" causes the message to scroll across the screen from right ot left.\r\n\r\nOriginal concept by Bruce Burkhalter."
+  },
+  "bitmaps": []
+}

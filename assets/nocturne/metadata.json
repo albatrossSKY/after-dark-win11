@@ -1,0 +1,65 @@
+{
+  "file": "NOCTURNE.AD",
+  "module": "NOCTURNE",
+  "description": "Graphics Module Library",
+  "imports": [
+    "KERNEL",
+    "GDI",
+    "USER"
+  ],
+  "nametable": {
+    "2:#1": "EYES"
+  },
+  "controls": {
+    "#1": {
+      "type": 0,
+      "title": "Flying Objects",
+      "count": 0,
+      "default_value": 0
+    },
+    "#2": {
+      "type": 0,
+      "title": "Toast",
+      "count": 3,
+      "default_value": 0
+    },
+    "#3": {
+      "type": 5,
+      "title": "Color",
+      "count": 0,
+      "default_value": 1
+    },
+    "#4": {
+      "type": 1,
+      "title": "Density",
+      "count": 4,
+      "default_value": 100,
+      "labels": [
+        "Sparse",
+        "A few",
+        "A bunch",
+        "Lots"
+      ],
+      "thresholds": [
+        25,
+        50,
+        75,
+        100
+      ]
+    }
+  },
+  "strings": {
+    "#10": "Nocturnes by Jon Steinmetz and Mouse Herrell.\r\n  \u00a91990 Berkeley Systems Inc.",
+    "#20": "Nocturnes",
+    "#30": "NOCTURNES (tm)\r\n\r\nLions and tigers and bears, oh my!\r\n\r\n "
+  },
+  "bitmaps": [
+    {
+      "id": "#1",
+      "name": "EYES",
+      "width": 102,
+      "height": 80,
+      "bpp": 1
+    }
+  ]
+}
